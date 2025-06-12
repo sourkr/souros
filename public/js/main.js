@@ -39,7 +39,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     ];
 
-    // --- Desktop Icon Loading ---
+    /**
+     * Renders desktop icons for all available applications and attaches click handlers to launch their windows.
+     *
+     * Clears any existing icons and populates the desktop icon grid with icons representing each app.
+     */
     function loadDesktopIcons() {
         iconGrid.innerHTML = ''; // Clear existing icons
         apps.forEach(app => {
@@ -62,7 +66,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Windowing System ---
+    /**
+     * Opens an application window on the desktop, creating and displaying it if not already open.
+     *
+     * If the application's window is already open, brings it to the front instead of creating a duplicate.
+     *
+     * @param {Object} app - The application definition containing `id`, `name`, `icon`, and `content`.
+     *
+     * @remark
+     * The window is positioned randomly within the desktop area and made draggable by its header. Window content is inserted as raw HTML; ensure `app.content` is trusted to avoid security risks.
+     */
     function openWindow(app) {
         if (openWindows[app.id]) {
             // Focus existing window if already open
@@ -117,6 +130,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    /**
+     * Closes and removes the window associated with the specified app ID from the desktop environment.
+     *
+     * @param {string} appId - The unique identifier of the app whose window should be closed.
+     */
     function closeWindow(appId) {
         if (openWindows[appId]) {
             windowContainer.removeChild(openWindows[appId]);
@@ -124,6 +142,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Enables drag-and-drop movement of a window element using a specified handle.
+     *
+     * Allows the user to reposition the {@link element} within the desktop area by dragging the {@link handle}, constraining movement within the visible desktop bounds and above the taskbar.
+     *
+     * @param {HTMLElement} element - The window element to be made draggable.
+     * @param {HTMLElement} handle - The child element that acts as the drag handle (typically the window header).
+     */
     function makeDraggable(element, handle) {
         let isDragging = false;
         let offsetX, offsetY;

@@ -2,69 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Install WebOS</title>
+    <link rel="stylesheet" href="/css/style.css">
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f0f0f0; }
-        .container { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); text-align: center; }
-        h1 { color: #333; }
-        p { color: #666; }
-        .progress-bar-container { width: 100%; background-color: #e0e0e0; border-radius: 4px; margin: 20px 0; }
-        .progress-bar { width: 0%; height: 20px; background-color: #4caf50; border-radius: 4px; transition: width 0.5s ease-in-out; }
-        button { background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:disabled { background-color: #aaa; }
-        .status { margin-top: 10px; font-style: italic; color: #555; }
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; font-family: sans-serif; }
+        .install-container { padding: 30px; border: 1px solid #ccc; background: #f0f0f0; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); text-align: center; }
+        #installButton { padding: 10px 20px; font-size: 16px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; margin-top: 20px; }
+        #installButton:hover { background-color: #0056b3; }
+        p { color: #333; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Install WebOS</h1>
-        <p>Welcome to the WebOS installation. Click the button below to begin.</p>
-        <div class="progress-bar-container">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
-        <button id="installButton">Install Now</button>
-        <p class="status" id="statusText">Ready to install.</p>
+    <div class="install-container">
+        <h1>WebOS Installation</h1>
+        <p>Welcome! Click the button below to install WebOS.</p>
+        <p>This will use your browser's local storage (Drive A:) for the OS files.</p>
+        <button id="installButton">Install WebOS</button>
+        <p id="installMessage" style="margin-top: 15px;"></p>
     </div>
 
-    <script>
-        const installButton = document.getElementById('installButton');
-        const progressBar = document.getElementById('progressBar');
-        const statusText = document.getElementById('statusText');
-
-        installButton.addEventListener('click', () => {
-            installButton.disabled = true;
-            statusText.textContent = 'Initializing installation...';
-            let progress = 0;
-
-            const interval = setInterval(() => {
-                progress += 10;
-                progressBar.style.width = progress + '%';
-
-                if (progress === 10) statusText.textContent = 'Copying files...';
-                if (progress === 50) statusText.textContent = 'Configuring system...';
-                if (progress === 80) statusText.textContent = 'Finalizing setup...';
-
-                if (progress >= 100) {
-                    clearInterval(interval);
-                    progressBar.style.width = '100%';
-                    statusText.textContent = 'Installation Complete!';
-                    localStorage.setItem('webOsInstalled', 'true');
-                    installButton.textContent = 'Installed';
-                    // Optionally redirect to the main desktop page
-                    // setTimeout(() => { window.location.href = '/'; }, 2000);
-                    alert('WebOS installed successfully! You will be redirected to the main page if the server is running, or you can navigate there manually.');
-                }
-            }, 200);
-        });
-
-        // Check if already installed
-        if (localStorage.getItem('webOsInstalled') === 'true') {
-            installButton.textContent = 'Already Installed';
-            installButton.disabled = true;
-            progressBar.style.width = '100%';
-            statusText.textContent = 'WebOS is already installed on this device.';
-        }
-    </script>
+    <script src="/js/storage.js"></script>
+    <script src="install.js"></script>
 </body>
 </html>

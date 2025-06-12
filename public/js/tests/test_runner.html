@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebOS Test Runner</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; color: #333; }
+        h1 { border-bottom: 1px solid #ccc; padding-bottom: 10px; color: #555; }
+        #results { margin-top: 20px; background-color: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
+        .log-entry { padding: 8px; border-bottom: 1px dotted #eee; font-family: 'Courier New', Courier, monospace; font-size: 0.9em; }
+        .log-entry:last-child { border-bottom: none; }
+        .pass { color: green; }
+        .fail { color: red; font-weight: bold; }
+        .warn { color: orange; }
+        .summary { margin-top: 20px; padding: 15px; background-color: #e9e9e9; border: 1px solid #ccc; border-radius: 5px;}
+        .summary h3 { margin-top: 0; }
+    </style>
+</head>
+<body>
+    <h1>WebOS Test Runner</h1>
+    <p>Open the browser console for potentially more detailed interactive outputs. Test results are displayed below:</p>
+
+    <div id="results">
+        <h2>Test Output:</h2>
+        <div id="log-container"></div>
+    </div>
+    <div id="summary-container" class="summary">
+        <h3>Summary:</h3>
+        <div id="summary-content">Waiting for tests to complete...</div>
+    </div>
+
+    <!-- Load the main storage script first as it's a dependency for the tests -->
+    <script src="../storage.js"></script>
+
+    <!-- Load the test script -->
+    <script src="storage.test.js"></script>
+
+    <script>
+        // Hijack console.log and console.error to display in HTML as well
+        (function() {
+            const logContainer = document.getElementById('log-container');
+            const summaryContent = document.getElementById('summary-content');
+
+            const originalConsoleLog = console.log;
+            const originalConsoleError = console.error;
+            const originalConsoleWarn = console.warn;
+
+            let finalSummary = { passed: 0, failed: 0, total: 0 };
+
+            function formatArgs(args) {
+                return Array.from(args).map(arg => {
+                    if (typeof arg === 'string' && arg.includes('%c')) { // Basic handling for styled logs
+                        return arg.replace(/%c/g, ''); // Remove styling cues for HTML display
+                    }
+                    if (typeof arg === 'object' && arg !== null) {
+                        try {
+                            return JSON.stringify(arg);
+                        } catch (e) {
+                            return arg.toString();
+                        }
+                    }
+                    return arg;
+                }).join(' ');
+            }
+
+            function addLogEntry(message, type) {
+                const div = document.createElement('div');
+                div.className = 'log-entry ' + type;
+                div.textContent = message;
+                logContainer.appendChild(div);
+            }
+
+            console.log = function(...args) {
+                originalConsoleLog.apply(console, args);
+                const message = formatArgs(args);
+                let type = '';
+                if (message.startsWith('PASS:')) type = 'pass';
+
+                addLogEntry(message, type);
+
+                if (message.includes('--- Test Summary ---')) { // Trigger summary update
+                    // The test script itself will log the summary details.
+                    // We just need to capture them if needed here, or let them flow.
+                } else if (message.startsWith('Passed:')) {
+                    finalSummary.passed = parseInt(message.split(':')[1].trim(), 10);
+                } else if (message.startsWith('Failed:')) {
+                    finalSummary.failed = parseInt(message.split(':')[1].trim(), 10);
+                } else if (message.startsWith('Total tests:')) {
+                    finalSummary.total = parseInt(message.split(':')[1].trim(), 10);
+                }
+
+
+                if (message.startsWith('All tests passed!')) {
+                     summaryContent.innerHTML = `<strong class="pass">All tests passed!</strong><br>
+                                                Passed: ${finalSummary.passed}<br>
+                                                Failed: ${finalSummary.failed}<br>
+                                                Total: ${finalSummary.total}`;
+                }
+            };
+
+            console.error = function(...args) {
+                originalConsoleError.apply(console, args);
+                const message = formatArgs(args);
+                addLogEntry(message, 'fail');
+
+                if (message.startsWith('Some tests failed.')) {
+                     summaryContent.innerHTML = `<strong class="fail">Some tests failed.</strong><br>
+                                                Passed: ${finalSummary.passed}<br>
+                                                Failed: ${finalSummary.failed}<br>
+                                                Total: ${finalSummary.total}`;
+                } else if (message.startsWith('FAIL:')) {
+                    // Individual failure, already logged.
+                }
+            };
+
+            console.warn = function(...args) {
+                originalConsoleWarn.apply(console, args);
+                const message = formatArgs(args);
+                addLogEntry("WARN: " + message, 'warn');
+            };
+
+            // Initial message if tests haven't run yet or if runTests isn't called by storage.test.js
+            if (typeof runTests !== 'function' && !window.WebOSFileSystem) {
+                 summaryContent.textContent = 'Test script loaded, but WebOSFileSystem not found or runTests not initiated.';
+            } else if (typeof runTests === 'function' && !window.WebOSFileSystem) {
+                summaryContent.textContent = 'WebOSFileSystem not found. Tests cannot run.';
+            } else if (window.WebOSFileSystem && typeof runTests === 'undefined') {
+                summaryContent.textContent = 'storage.js loaded, but storage.test.js or runTests() is missing/not triggered.';
+            }
+
+
+        })();
+
+        // The storage.test.js already calls runTests() if WebOSFileSystem is available.
+        // No explicit call to runTests() needed here if that behavior is kept.
+        // document.addEventListener('DOMContentLoaded', () => {
+        //    if (window.WebOSFileSystem && typeof runTests === 'function') {
+        //        // runTests(); // Already called by storage.test.js timeout
+        //    } else {
+        //        const summaryContent = document.getElementById('summary-content');
+        //        summaryContent.innerHTML = 'Could not run tests. Ensure storage.js is loaded and WebOSFileSystem is initialized before storage.test.js runs.';
+        //    }
+        // });
+    </script>
+</body>
+</html>

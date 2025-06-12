@@ -1,14 +1,29 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. OS Installation Check
-    if (localStorage.getItem('webOsInstalled') !== 'true' && window.location.pathname !== '/install/') {
-        // Redirect to installation page if not installed and not already on it
-        // Check path to prevent redirect loop if server serves install/index.html on a different route
-        if (window.location.pathname.endsWith('/install/') || window.location.pathname.endsWith('/install/index.html')) {
-            // Already on an installation page path, do nothing
-        } else {
-             window.location.href = '/install/'; // Adjust if your server setup is different
-             return; // Stop further execution
+async function checkOSInstallationAndRedirect() {
+    try {
+        const osInstalledFlag = await window.WebOSFileSystem.readFile('A:/system/os_installed.flag');
+        if (osInstalledFlag !== 'true') {
+            console.log("OS not installed or flag not set. Redirecting to install page.");
+            if (!window.location.pathname.includes('/install/')) {
+                 window.location.href = '/install/';
+            }
+            return true; // Indicates redirection is happening or should happen
         }
+    } catch (error) {
+        // This likely means the file doesn't exist, which implies OS is not installed.
+        console.warn("Error checking OS installation flag (A:/system/os_installed.flag probably doesn't exist):", error);
+        console.log("Assuming OS not installed. Redirecting to install page.");
+        if (!window.location.pathname.includes('/install/')) {
+            window.location.href = '/install/';
+        }
+        return true; // Indicates redirection
+    }
+    return false; // OS is installed, no redirection needed
+}
+
+(async () => {
+    const shouldStopExecution = await checkOSInstallationAndRedirect();
+    if (shouldStopExecution) {
+        return;
     }
 
     const desktop = document.getElementById('desktop');
@@ -40,26 +55,272 @@ document.addEventListener('DOMContentLoaded', () => {
         {
             id: 'notepad',
             name: 'Notepad',
-            icon: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/svgs/solid/file-lines.svg', // Example icon
+            icon: 'assets/icons/file-lines.svg',
             content: '<textarea style="width:98%; height:95%; border:none; resize:none;"></textarea>'
         },
         {
             id: 'settings',
             name: 'Settings',
-            icon: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/svgs/solid/gear.svg',
+            icon: 'assets/icons/gear.svg',
             content: '<p>System settings will go here. Adjust display, sound, etc.</p>'
         },
         {
             id: 'browser',
             name: 'Browser',
-            icon: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/svgs/solid/globe.svg',
+            icon: 'assets/icons/globe.svg',
             content: '<iframe src="https://www.google.com/webhp?igu=1" style="width:100%; height:100%; border:none;"></iframe>'
         },
         {
             id: 'fileExplorer',
             name: 'File Explorer',
-            icon: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/svgs/solid/folder-open.svg',
+            icon: 'assets/icons/folder-open.svg',
             content: '<div class="file-explorer-main-area" style="width:100%; height:100%;"></div>' // This div will be populated by the file explorer logic
+        },
+        {
+            id: 'osUpdate',
+            name: 'OS Update',
+            icon: 'assets/icons/cloud-arrow-down.svg',
+            content: `
+                <div style="padding: 15px; font-family: sans-serif; color: #333;">
+                    <h2>OS Update</h2>
+                    <p>Current OS Version: <span id="osUpdateCurrentVersion">1.0.0</span> (from A:/system/os_config.json)</p>
+                    <p>Available Version: <span id="osUpdateAvailableVersion">-</span></p>
+                    <button id="osCheckForUpdatesBtn" style="padding: 8px 12px; margin-right: 10px;">Check for Updates</button>
+                    <button id="osApplyUpdateBtn" style="padding: 8px 12px;" disabled>Apply Update</button>
+                    <p id="osUpdateStatus" style="margin-top: 10px;"></p>
+                    <script>
+                        // Script for OS Update App functionality (will be enhanced later)
+                        (function() {
+                            const currentVersionElem = document.getElementById('osUpdateCurrentVersion');
+                            const availableVersionElem = document.getElementById('osUpdateAvailableVersion');
+                            const checkForUpdatesBtn = document.getElementById('osCheckForUpdatesBtn');
+                            const applyUpdateBtn = document.getElementById('osApplyUpdateBtn');
+                            const statusElem = document.getElementById('osUpdateStatus');
+
+                            let latestServerVersionInfo = null; // To store fetched update info
+
+                            async function fetchCurrentOSVersion() {
+                                if (window.WebOSFileSystem) {
+                                    try {
+                                        const configStr = await window.WebOSFileSystem.readFile('A:/system/os_config.json');
+                                        if (configStr) {
+                                            const config = JSON.parse(configStr);
+                                            currentVersionElem.textContent = config.version || '1.0.0';
+                                            return config.version || '1.0.0';
+                                        }
+                                    } catch (e) {
+                                        console.error('Error reading OS config for version:', e);
+                                        currentVersionElem.textContent = 'Error';
+                                    }
+                                }
+                                return '1.0.0'; // Default if not found
+                            }
+
+                            fetchCurrentOSVersion(); // Load on app open
+
+                            checkForUpdatesBtn.addEventListener('click', async () => {
+                                statusElem.textContent = 'Checking for updates...';
+                                applyUpdateBtn.disabled = true;
+                                latestServerVersionInfo = null;
+                                const currentVersion = await fetchCurrentOSVersion();
+
+                                try {
+                                    const response = await fetch('/api/os_update_info.json');
+                                    if (!response.ok) {
+                                        throw new Error(`HTTP error! status: ${response.status}`);
+                                    }
+                                    const data = await response.json();
+                                    latestServerVersionInfo = data; // Store fetched info
+
+                                    availableVersionElem.textContent = data.latestVersion;
+                                    // Basic version comparison (can be improved for semantic versioning)
+                                    if (data.latestVersion > currentVersion) {
+                                        statusElem.textContent = `Update available: ${data.latestVersion} - ${data.description}`;
+                                        applyUpdateBtn.disabled = false;
+                                    } else {
+                                        statusElem.textContent = 'Your OS is up to date.';
+                                    }
+                                } catch (error) {
+                                    console.error('Error fetching update info:', error);
+                                    statusElem.textContent = 'Error checking for updates. Please try again.';
+                                    availableVersionElem.textContent = '-';
+                                }
+                            });
+
+                            applyUpdateBtn.addEventListener('click', async () => {
+                                if (!latestServerVersionInfo) {
+                                    statusElem.textContent = 'No update information available. Please check for updates first.';
+                                    return;
+                                }
+
+                                statusElem.textContent = `Applying update to ${latestServerVersionInfo.latestVersion}...`;
+                                applyUpdateBtn.disabled = true;
+
+                                // Mock apply
+                                setTimeout(async () => {
+                                    if (window.WebOSFileSystem) {
+                                        const newConfig = {
+                                            version: latestServerVersionInfo.latestVersion,
+                                            installedDate: new Date().toISOString(),
+                                            lastUpdateCheck: new Date().toISOString() // Add more info if needed
+                                        };
+                                        try {
+                                            await window.WebOSFileSystem.writeFile('A:/system/os_config.json', JSON.stringify(newConfig));
+                                            currentVersionElem.textContent = newConfig.version;
+                                            availableVersionElem.textContent = '-'; // Clear available version
+                                            latestServerVersionInfo = null; // Clear fetched info
+                                            statusElem.textContent = `OS updated successfully to ${newConfig.version}! Restart might be required (not simulated).`;
+                                        } catch (e) {
+                                            console.error('Error writing updated OS config:', e);
+                                            statusElem.textContent = 'Update failed (Error writing config).';
+                                            applyUpdateBtn.disabled = false; // Re-enable button on failure
+                                        }
+                                    } else {
+                                        statusElem.textContent = 'Update failed (FileSystem not available).';
+                                        applyUpdateBtn.disabled = false; // Re-enable button on failure
+                                    }
+                                }, 1500); // Simulate delay
+                            });
+                        })();
+                    </script>
+                </div>
+            `
+        },
+        {
+            id: 'appStore',
+            name: 'App Store',
+            icon: 'assets/icons/store.svg',
+            content: `
+                <div style="padding: 15px; font-family: sans-serif; color: #333; height: 100%; display: flex; flex-direction: column;">
+                    <h2>App Store</h2>
+                    <div id="appStoreAvailableApps" style="flex-grow: 1; overflow-y: auto; border: 1px solid #eee; padding: 10px; margin-bottom: 10px;">
+                        <p>Loading apps...</p>
+                    </div>
+                    <div id="appStoreStatus" style="margin-top: 10px; min-height: 20px;"></div>
+                    <script>
+                        // Script for App Store App functionality (will be enhanced later)
+                        (function() {
+                            const availableAppsContainer = document.getElementById('appStoreAvailableApps');
+                            const statusElem = document.getElementById('appStoreStatus');
+                            let installedApps = {};
+                            let catalogApps = []; // To store apps from API
+
+                            async function loadInstalledAppsManifest() {
+                                if (window.WebOSFileSystem) {
+                                    try {
+                                        if (!window.WebOSFileSystem.getDrive('B')) {
+                                            console.warn('Drive B (IndexedDB) not available for App Store manifest.');
+                                        } else {
+                                            await window.WebOSFileSystem.createDirectory('B:/apps');
+                                        }
+                                        const manifestStr = await window.WebOSFileSystem.readFile('B:/apps/installed_manifest.json');
+                                        if (manifestStr) {
+                                            installedApps = JSON.parse(manifestStr);
+                                        }
+                                    } catch (e) {
+                                        console.log('No app manifest found or error reading it (B:/apps/installed_manifest.json). Assuming no apps installed via store yet.', e);
+                                        installedApps = {};
+                                        if (window.WebOSFileSystem.getDrive('B')) {
+                                           try {
+                                               await window.WebOSFileSystem.writeFile('B:/apps/installed_manifest.json', JSON.stringify({}));
+                                           } catch (initError) {
+                                               console.error("Failed to initialize app manifest on Drive B:", initError);
+                                           }
+                                        }
+                                    }
+                                }
+                            }
+
+                            async function saveInstalledAppsManifest() {
+                                if (window.WebOSFileSystem && window.WebOSFileSystem.getDrive('B')) {
+                                    try {
+                                        await window.WebOSFileSystem.writeFile('B:/apps/installed_manifest.json', JSON.stringify(installedApps));
+                                    } catch (saveError) {
+                                        console.error("Failed to save app manifest on Drive B:", saveError);
+                                        statusElem.textContent = 'Error saving app installation status.';
+                                    }
+                                }
+                            }
+
+                            function renderApps() {
+                                availableAppsContainer.innerHTML = '';
+                                if (catalogApps.length === 0) {
+                                    // This message will be shown if catalog is empty or failed to load
+                                    // The catch block in the IIFE will set a more specific error message in statusElem if fetch fails
+                                    availableAppsContainer.innerHTML = '<p>No apps available at the moment. Check status below.</p>';
+                                    return;
+                                }
+                                catalogApps.forEach(app => {
+                                    const appEntry = document.createElement('div');
+                                    appEntry.style.borderBottom = '1px solid #eee';
+                                    appEntry.style.paddingBottom = '10px';
+                                    appEntry.style.marginBottom = '10px';
+
+                                    let appIconHtml = app.icon ? `<img src="${app.icon}" alt="${app.name}" style="width: 24px; height: 24px; vertical-align: middle; margin-right: 10px;">` : '';
+
+                                    appEntry.innerHTML = `
+                                        ${appIconHtml}
+                                        <strong>${app.name}</strong> (v${app.version}) <em style="font-size:0.8em; color: #555;">by ${app.developer || 'Unknown Dev'}</em>
+                                        <p style="font-size: 0.9em; margin: 5px 0;">${app.description}</p>
+                                        <p style="font-size: 0.8em; color: #777;">Permissions: ${app.permissions && app.permissions.length > 0 ? app.permissions.join(', ') : 'none'}</p>
+                                    `;
+
+                                    const installButton = document.createElement('button');
+                                    installButton.style.padding = '5px 10px';
+
+                                    if (installedApps[app.id]) {
+                                        if (installedApps[app.id] < app.version) {
+                                            installButton.textContent = 'Update to v' + app.version;
+                                            installButton.onclick = () => handleInstallOrUpdate(app, true);
+                                        } else {
+                                            installButton.textContent = 'Installed (v' + installedApps[app.id] + ')';
+                                            installButton.disabled = true;
+                                        }
+                                    } else {
+                                        installButton.textContent = 'Install';
+                                        installButton.onclick = () => handleInstallOrUpdate(app, false);
+                                    }
+
+                                    appEntry.appendChild(installButton);
+                                    availableAppsContainer.appendChild(appEntry);
+                                });
+                            }
+
+                            async function handleInstallOrUpdate(app, isUpdate) {
+                                if (!window.WebOSFileSystem.getDrive('B')) {
+                                    statusElem.textContent = 'Drive B (for app installations) is not available.';
+                                    console.error('Drive B not available for app installation/update.');
+                                    return;
+                                }
+                                statusElem.textContent = `${isUpdate ? 'Updating' : 'Installing'} ${app.name}...`;
+                                setTimeout(async () => {
+                                    installedApps[app.id] = app.version;
+                                    await saveInstalledAppsManifest();
+                                    statusElem.textContent = `${app.name} ${isUpdate ? 'updated' : 'installed'} successfully to v${app.version}! (Restart WebOS or App Store to see changes in main app list - not simulated).`;
+                                    renderApps();
+                                    console.warn("App '" + app.name + "' processed. Manual refresh or advanced inter-app communication needed to see it live in desktop.");
+                                }, 1500);
+                            }
+
+                            (async () => { // Main IIFE for the app
+                                await loadInstalledAppsManifest();
+                                try {
+                                    const response = await fetch('/api/app_store_catalog.json');
+                                    if (!response.ok) {
+                                        throw new Error(`HTTP error! status: ${response.status}`);
+                                    }
+                                    catalogApps = await response.json();
+                                } catch (error) {
+                                    console.error('Error fetching app catalog:', error);
+                                    statusElem.textContent = 'Could not load app catalog: ' + error.message;
+                                    catalogApps = []; // Ensure it's an empty array on error
+                                }
+                                renderApps();
+                            })();
+                        })();
+                    </script>
+                </div>
+            `
         }
     ];
 
@@ -307,4 +568,4 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Start Menu clicked! (Not implemented yet)');
         });
     }
-});
+})();

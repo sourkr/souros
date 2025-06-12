@@ -1,0 +1,38 @@
+[
+  {
+    "id": "calculator",
+    "name": "Calculator",
+    "version": "1.0.1",
+    "description": "A simple calculator app for your daily calculations.",
+    "icon": "assets/icons/calculator.svg",
+    "permissions": ["localStorage"],
+    "developer": "WebOS Team"
+  },
+  {
+    "id": "weather",
+    "name": "Weather App",
+    "version": "1.2.0",
+    "description": "Get the latest weather forecast for your location.",
+    "icon": "assets/icons/cloud-sun.svg",
+    "permissions": ["geolocation", "network"],
+    "developer": "Meteo Inc."
+  },
+  {
+    "id": "game2048",
+    "name": "2048 Game",
+    "version": "1.0.3",
+    "description": "A fun and addictive puzzle game. Combine tiles to reach 2048!",
+    "icon": "assets/icons/puzzle-piece.svg",
+    "permissions": [],
+    "developer": "Game Studios"
+  },
+  {
+    "id": "advancedNotepad",
+    "name": "Notepad Pro",
+    "version": "2.0.0",
+    "description": "Advanced text editor with syntax highlighting (simulated).",
+    "icon": "assets/icons/file-pen.svg",
+    "permissions": ["indexedDB"],
+    "developer": "WebOS Team"
+  }
+]

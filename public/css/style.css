@@ -127,3 +127,83 @@ body, html {
     flex-grow: 1; /* Content area takes remaining space */
     overflow: auto; /* Add scrollbars if content exceeds window size */
 }
+
+/* --- File Explorer Styles --- */
+.file-explorer-main-area {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Ensure it fills the window content area */
+    background-color: #fff; /* White background for content area */
+}
+
+.fe-nav {
+    padding: 8px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #dcdcdc;
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between button and path */
+}
+
+.fe-nav button {
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+    background-color: #e9e9e9;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.fe-nav button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.fe-nav button:hover:not(:disabled) {
+    background-color: #d0d0d0;
+}
+
+.fe-nav span { /* Path display */
+    font-size: 12px;
+    color: #333;
+}
+
+.fe-item-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-grow: 1; /* Takes up remaining space */
+    overflow-y: auto; /* Scroll if content overflows */
+}
+
+.fe-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0; /* Separator line */
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between icon and name */
+    font-size: 14px;
+}
+
+.fe-item:hover {
+    background-color: #e6f7ff; /* Light blue hover */
+}
+
+.fe-item:last-child {
+    border-bottom: none;
+}
+
+.fe-item-icon {
+    font-size: 16px; /* Adjust icon size */
+    width: 20px; /* Fixed width for alignment */
+    text-align: center;
+}
+
+/* Specific icon colors (optional) */
+.fe-item[data-type="folder"] .fe-item-icon {
+    color: #ffc107; /* Yellow for folders */
+}
+
+.fe-item[data-type="file"] .fe-item-icon {
+    color: #777; /* Grey for files */
+}

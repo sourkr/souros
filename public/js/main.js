@@ -17,6 +17,24 @@ document.addEventListener('DOMContentLoaded', () => {
     let highestZIndex = 100; // For managing window stacking
     let openWindows = {}; // To track open windows and prevent duplicates
 
+    const mockFileSystem = {
+        'root': {
+            type: 'folder',
+            children: {
+                'Documents': { type: 'folder', children: {
+                    'Report.docx': { type: 'file', content: 'This is a Word document.' },
+                    'Presentation.pptx': { type: 'file', content: 'This is a PowerPoint presentation.' }
+                }},
+                'Pictures': { type: 'folder', children: {
+                    'Vacation.jpg': { type: 'file', content: 'Image data' },
+                    'Family.png': { type: 'file', content: 'Image data' }
+                }},
+                'README.txt': { type: 'file', content: 'Welcome to WebOS!' }
+            }
+        }
+    };
+    // Note: currentPath will be managed per window instance via dataset attributes.
+
     // --- Sample App Definitions ---
     const apps = [
         {
@@ -36,6 +54,12 @@ document.addEventListener('DOMContentLoaded', () => {
             name: 'Browser',
             icon: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/svgs/solid/globe.svg',
             content: '<iframe src="https://www.google.com/webhp?igu=1" style="width:100%; height:100%; border:none;"></iframe>'
+        },
+        {
+            id: 'fileExplorer',
+            name: 'File Explorer',
+            icon: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/svgs/solid/folder-open.svg',
+            content: '<div class="file-explorer-main-area" style="width:100%; height:100%;"></div>' // This div will be populated by the file explorer logic
         }
     ];
 
@@ -102,7 +126,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Content
         const contentDiv = document.createElement('div');
         contentDiv.className = 'window-content';
-        contentDiv.innerHTML = app.content; // In a real app, you'd build this more securely
+        // For File Explorer, the content div is initially empty or a placeholder,
+        // renderFileExplorer will populate it.
+        if (app.id !== 'fileExplorer') {
+            contentDiv.innerHTML = app.content; // In a real app, you'd build this more securely
+        } else {
+            // Ensure the specific div for file explorer is there as defined in apps array
+             contentDiv.innerHTML = app.content; // This should create the .file-explorer-main-area
+        }
 
         windowDiv.appendChild(header);
         windowDiv.appendChild(contentDiv);
@@ -115,6 +146,107 @@ document.addEventListener('DOMContentLoaded', () => {
         windowDiv.addEventListener('mousedown', () => {
              windowDiv.style.zIndex = ++highestZIndex;
         });
+
+        if (app.id === 'fileExplorer') {
+            windowDiv.dataset.currentPath = JSON.stringify(['root']); // Initial path for this window
+            const feMainArea = windowDiv.querySelector('.file-explorer-main-area');
+            if (feMainArea) {
+                 renderFileExplorer(windowDiv, JSON.parse(windowDiv.dataset.currentPath));
+            } else {
+                console.error("File Explorer main area not found on window creation.");
+            }
+        }
+    }
+
+    function renderFileExplorer(appWindow, pathArray) {
+        const targetDiv = appWindow.querySelector('.file-explorer-main-area');
+        if (!targetDiv) {
+            console.error("Target div for file explorer not found in window:", appWindow);
+            return;
+        }
+
+        let currentLevelData = mockFileSystem;
+        let validPath = true;
+        for (const part of pathArray) {
+            if (currentLevelData[part] && currentLevelData[part].type === 'folder') {
+                currentLevelData = currentLevelData[part].children;
+            } else {
+                // Path part not found or not a folder, try to recover or show error
+                console.warn('Invalid path segment:', part, 'in', pathArray.join('/'));
+                validPath = false;
+                break;
+            }
+        }
+
+        if (!validPath || typeof currentLevelData !== 'object') {
+            // Attempt to reset to root if path became invalid
+            // Or if currentLevelData is not an object (e.g. points to a file's children)
+            pathArray = ['root'];
+            appWindow.dataset.currentPath = JSON.stringify(pathArray);
+            currentLevelData = mockFileSystem.root.children;
+            console.warn('Path was invalid or led to non-folder, reset to root. Displaying root children.');
+        }
+
+
+        let html = '<div class="fe-nav" style="padding: 5px; background: #eee; border-bottom: 1px solid #ccc;">';
+        html += `<button class="fe-up-btn" ${pathArray.length <= 1 ? 'disabled' : ''}>Up</button> `;
+        html += `<span>Path: /${pathArray.join('/')}</span>`; // Display full path from root
+        html += '</div>';
+        html += '<ul class="fe-item-list" style="list-style: none; padding: 5px; margin: 0; height: calc(100% - 30px); overflow-y: auto;">';
+
+        for (const itemName in currentLevelData) {
+            const item = currentLevelData[itemName];
+            const icon = item.type === 'folder' ? '&#128193;' : '&#128196;'; // Folder and File icons
+            html += `<li class="fe-item" data-name="${itemName}" data-type="${item.type}" style="padding: 3px; cursor: pointer; user-select:none;">`;
+            html += `<span class="fe-item-icon">${icon}</span> ${itemName}`;
+            html += '</li>';
+        }
+        html += '</ul>';
+        targetDiv.innerHTML = html;
+
+        // Add event listeners
+        appWindow.querySelectorAll('.fe-item').forEach(itemElem => {
+            itemElem.addEventListener('click', () => {
+                const itemName = itemElem.getAttribute('data-name');
+                const itemType = itemElem.getAttribute('data-type');
+                // Get current path from window dataset
+                let currentWindowPath = JSON.parse(appWindow.dataset.currentPath);
+
+                if (itemType === 'folder') {
+                    const newPath = [...currentWindowPath, itemName];
+                    appWindow.dataset.currentPath = JSON.stringify(newPath);
+                    renderFileExplorer(appWindow, newPath);
+                } else {
+                    // Re-evaluate currentLevel for file content lookup based on currentWindowPath
+                    let fileParentLevel = mockFileSystem;
+                    for(const part of currentWindowPath) {
+                        if(fileParentLevel[part] && fileParentLevel[part].type === 'folder') {
+                            fileParentLevel = fileParentLevel[part].children;
+                        } else {
+                            // Should not happen if path is correct
+                            break;
+                        }
+                    }
+                    if (fileParentLevel[itemName] && fileParentLevel[itemName].content) {
+                        alert(`File clicked: ${itemName}\nContent: ${fileParentLevel[itemName].content}`);
+                    } else {
+                         alert(`File clicked: ${itemName}\nContent: Not available or error in path.`);
+                    }
+                }
+            });
+        });
+
+        const upButton = appWindow.querySelector('.fe-up-btn');
+        if (upButton) {
+            upButton.addEventListener('click', () => {
+                let currentWindowPath = JSON.parse(appWindow.dataset.currentPath);
+                if (currentWindowPath.length > 1) {
+                    const newPath = currentWindowPath.slice(0, -1);
+                    appWindow.dataset.currentPath = JSON.stringify(newPath);
+                    renderFileExplorer(appWindow, newPath);
+                }
+            });
+        }
     }
 
     function closeWindow(appId) {

@@ -1,0 +1,16 @@
+{
+  "name": "web-desktop",
+  "version": "0.1.0",
+  "description": "A simple web-based desktop environment.",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "install-deps": "npm install"
+  },
+  "dependencies": {
+    "express": "^4.17.1"
+  },
+  "devDependencies": {},
+  "author": "AI Assistant",
+  "license": "MIT"
+}

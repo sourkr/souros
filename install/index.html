@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Install WebOS</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f0f0f0; }
+        .container { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); text-align: center; }
+        h1 { color: #333; }
+        p { color: #666; }
+        .progress-bar-container { width: 100%; background-color: #e0e0e0; border-radius: 4px; margin: 20px 0; }
+        .progress-bar { width: 0%; height: 20px; background-color: #4caf50; border-radius: 4px; transition: width 0.5s ease-in-out; }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:disabled { background-color: #aaa; }
+        .status { margin-top: 10px; font-style: italic; color: #555; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Install WebOS</h1>
+        <p>Welcome to the WebOS installation. Click the button below to begin.</p>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <button id="installButton">Install Now</button>
+        <p class="status" id="statusText">Ready to install.</p>
+    </div>
+
+    <script>
+        const installButton = document.getElementById('installButton');
+        const progressBar = document.getElementById('progressBar');
+        const statusText = document.getElementById('statusText');
+
+        installButton.addEventListener('click', () => {
+            installButton.disabled = true;
+            statusText.textContent = 'Initializing installation...';
+            let progress = 0;
+
+            const interval = setInterval(() => {
+                progress += 10;
+                progressBar.style.width = progress + '%';
+
+                if (progress === 10) statusText.textContent = 'Copying files...';
+                if (progress === 50) statusText.textContent = 'Configuring system...';
+                if (progress === 80) statusText.textContent = 'Finalizing setup...';
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    progressBar.style.width = '100%';
+                    statusText.textContent = 'Installation Complete!';
+                    localStorage.setItem('webOsInstalled', 'true');
+                    installButton.textContent = 'Installed';
+                    // Optionally redirect to the main desktop page
+                    // setTimeout(() => { window.location.href = '/'; }, 2000);
+                    alert('WebOS installed successfully! You will be redirected to the main page if the server is running, or you can navigate there manually.');
+                }
+            }, 200);
+        });
+
+        // Check if already installed
+        if (localStorage.getItem('webOsInstalled') === 'true') {
+            installButton.textContent = 'Already Installed';
+            installButton.disabled = true;
+            progressBar.style.width = '100%';
+            statusText.textContent = 'WebOS is already installed on this device.';
+        }
+    </script>
+</body>
+</html>

@@ -1,89 +1,3 @@
-// Persistent Storage Wrapper (using localStorage by default, can be configured)
-const persistentStorageWrapper = {
-    driver: null, // Driver should be explicitly set by kernal or a specific driver module.
-
-    setDriver: function(driverInstance) {
-        this.driver = driverInstance;
-        // Log based on some property of driverInstance if possible, or a generic message
-        if (this.driver && typeof this.driver.getStorageType === 'function') {
-             console.log(`Persistent storage driver set to: ${this.driver.getStorageType()}`);
-        } else if (this.driver) {
-             console.log("Persistent storage driver set to a custom driver.");
-        } else {
-             console.log("Persistent storage driver set to: null");
-        }
-    },
-
-    isUsingLocalStorage: function() {
-        // localStorageWrapper will be removed, so this method might become obsolete or always false
-        return false;
-    },
-
-    isUsingIndexedDB: function() {
-        if (!this.driver) return false;
-        // This is a placeholder. A robust way would be for the driver passed to setDriver
-        // to have a property like `type: 'IndexedDB'`.
-        // For now, if a driver is set, it *could* be the IndexedDB one.
-        // The console log in setDriver can give a hint.
-        console.warn("isUsingIndexedDB() may not be fully accurate as it depends on the set driver's characteristics.");
-        // A simple check could be if it has an openDB method, characteristic of our IDB implementations
-        return typeof this.driver.openDB === 'function';
-    },
-
-    getItem: function(key) {
-        if (!this.driver) { console.error('No persistent storage driver set for getItem.'); return null; }
-        return this.driver.getItem(key);
-    },
-
-    setItem: function(key, value) {
-        if (!this.driver) { console.error('No persistent storage driver set for setItem.'); return; }
-        return this.driver.setItem(key, value);
-    },
-
-    removeItem: function(key) {
-        if (!this.driver) { console.error('No persistent storage driver set for removeItem.'); return; }
-        return this.driver.removeItem(key);
-    },
-
-    clear: function() {
-        if (!this.driver) { console.error('No persistent storage driver set for clear.'); return; }
-        return this.driver.clear();
-    },
-
-    key: function(index) {
-        if (!this.driver) { console.warn('No persistent storage driver set for key.'); return null; }
-        if (typeof this.driver.key === 'function') {
-            return this.driver.key(index);
-        }
-        console.warn('key(index) is not directly supported by the current persistent storage driver.');
-        return null;
-    },
-
-    length: function() {
-        if (!this.driver) { console.warn('No persistent storage driver set for length.'); return 0; }
-        if (typeof this.driver.length === 'function') {
-            return this.driver.length();
-        }
-        console.warn('length() is not directly supported by the current persistent storage driver. Use getAllItems and check its size.');
-        return 0;
-    },
-
-    getAllItems: function() {
-        if (!this.driver) { console.warn('No persistent storage driver set for getAllItems.'); return {}; }
-        if (typeof this.driver.getAllItems === 'function') {
-            return this.driver.getAllItems();
-        }
-        console.warn('getAllItems() is not directly supported by the current persistent storage driver.');
-        return {};
-    }
-};
-
-// Initial check for persistentStorageWrapper driver
-if (!persistentStorageWrapper.driver) {
-    console.warn("PersistentStorageWrapper initialized without a default driver. Explicitly set a driver using setDriver().");
-}
-
-
 // --- Unified FileSystem API ---
 class FileSystem {
     constructor(driveLetter, storageAdapter) {
@@ -776,19 +690,7 @@ window.WebOSFileSystem = {
         }
         return driveInfo;
     },
-    // Utility to switch persistentStorageWrapper's driver
-    switchToIndexedDBForPersistentStorage: function() {
-        console.warn("switchToIndexedDBForPersistentStorage: This method is deprecated. The IndexedDB driver should be set using persistentStorageWrapper.setDriver(driverInstance) by the responsible module (e.g., kernal or indexdb-driver itself).");
-        // Example: if (Drives.B && Drives.B.storage) persistentStorageWrapper.setDriver(Drives.B.storage);
-        // This is just an example, actual setting should be managed by kernal.
-    },
-    switchToLocalStorageForPersistentStorage: function() {
-        // persistentStorageWrapper.setDriver(localStorageWrapper); // localStorageWrapper is removed
-        console.warn("switchToLocalStorageForPersistentStorage is deprecated and no longer functional as localStorageWrapper has been removed.");
-        // Optionally, if there's another "simple" key-value store it could switch to:
-        // persistentStorageWrapper.setDriver(someOtherSimpleDriver);
-        // console.log("Switched persistentStorageWrapper to use someOtherSimpleDriver.");
-    }
+    // Utility methods related to persistentStorageWrapper removed.
 };
 
 
@@ -804,7 +706,7 @@ window.WebOSFileSystem = {
     if (Drives.B) {
         console.log("Drive B (IndexedDB) is available.");
         // Example: Switch persistentStorageWrapper to use IndexedDB if desired
-        // WebOSFileSystem.switchToIndexedDBForPersistentStorage();
+        // WebOSFileSystem.switchToIndexedDBForPersistentStorage(); // This method is now removed/deprecated
     } else {
         console.log("Drive B (IndexedDB) is not available/initialized for these examples.");
     }
@@ -891,14 +793,7 @@ window.WebOSFileSystem = {
         console.error("Error during FileSystem API example usage:", error);
     }
 
-    // Example: How an app might use persistentStorageWrapper directly
-    // (This part is for demonstration; actual apps would use WebOSFileSystem)
-    console.log("--- persistentStorageWrapper Example ---");
-    persistentStorageWrapper.setItem('app_preference_theme', 'dark');
-    console.log('Theme preference:', persistentStorageWrapper.getItem('app_preference_theme'));
-    // persistentStorageWrapper.clear(); // Be careful with clear, it wipes the entire chosen storage
-    console.log("--- End of persistentStorageWrapper Example ---");
-
+    // persistentStorageWrapper example usage block removed.
 
     // Log available drives
     console.log("Available drives:", WebOSFileSystem.getDrives());

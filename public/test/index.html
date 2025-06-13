@@ -2,32 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebOS Test Environment</title>
-    <link rel="stylesheet" href="/css/style.css"> <!-- Optional: link to main style for consistency -->
+    <title>WebOS Test Environment - Driver Tests</title>
+    <link rel="stylesheet" href="/css/style.css">
     <style>
         body { padding: 20px; font-family: sans-serif; }
-        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        #test-output { margin-top: 20px; border: 1px solid #ddd; padding: 10px; min-height: 100px; background: #f9f9f9; white-space: pre-wrap; font-family: monospace; }
+        #test-results li { padding: 5px; border-bottom: 1px solid #eee; }
+        #test-results .pass { background-color: #e6ffe6; }
+        #test-results .fail { background-color: #ffe6e6; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>WebOS Test Environment</h1>
-        <p>This page is intended for running application and system tests. Future test scripts and runners will integrate here.</p>
+    <h1>WebOS LocalStorage Driver Tests</h1>
+    <ul id="test-results"></ul>
 
-        <h2>Test Output:</h2>
-        <div id="test-output">
-            <p>Test runner not yet implemented or no tests configured to run on this page.</p>
-        </div>
-
-        <!--
-        Future test runner script could be loaded here:
-        <script src="test_runner.js"></script>
-        And specific test files:
-        <script src="app_tests/example_app.test.js"></script>
-        -->
-    </div>
+    <script src="/js/os-globals.js"></script>
+    <script src="/js/localstorage-driver.js"></script>
+    <script src="/js/storage.js"></script>
+    <script src="test_runner.js"></script>
+    <script src="driver.test.js"></script>
 </body>
 </html>

@@ -51,14 +51,14 @@ export function initOsUpdateApp(appContainer) {
             try {
                 const response = await fetch('/api/os_update_info.json');
                 if (!response.ok) {
-                    throw new Error(\`HTTP error! status: \${response.status}\`);
+                    throw new Error('HTTP error! status: ' + response.status);
                 }
                 const data = await response.json();
                 latestServerVersionInfo = data; // Store fetched info
 
                 availableVersionElem.textContent = data.latestVersion;
                 if (data.latestVersion > currentVersion) {
-                    statusElem.textContent = \`Update available: \${data.latestVersion} - \${data.description}\`;
+                    statusElem.textContent = 'Update available: ' + data.latestVersion + ' - ' + data.description;
                     applyUpdateBtn.disabled = false;
                 } else {
                     statusElem.textContent = 'Your OS is up to date.';
@@ -92,7 +92,7 @@ export function initOsUpdateApp(appContainer) {
                         currentVersionElem.textContent = newConfig.version;
                         availableVersionElem.textContent = '-';
                         latestServerVersionInfo = null;
-                        statusElem.textContent = \`OS updated successfully to \${newConfig.version}! Restart might be required (not simulated).\`;
+                        statusElem.textContent = 'OS updated successfully to ' + newConfig.version + '! Restart might be required (not simulated).';
                     } catch (e) {
                         console.error('Error writing updated OS config:', e);
                         statusElem.textContent = 'Update failed (Error writing config).';

@@ -45,17 +45,11 @@ function _renderFileExplorerInternal(appWindow) {
     let validPath = true;
     // Traverse the pathArray to get to the current directory's data
     for (const part of pathArray) {
-        if (currentLevelData[part] && currentLevelData[part].type === 'folder') {
-            currentLevelData = currentLevelData[part].children;
-        } else if (part === 'root' && currentLevelData[part] && currentLevelData[part].type === 'folder') {
-            // Special handling for the first "root" segment if mockFileSystem is structured like mockFileSystem.root.children
-            currentLevelData = currentLevelData[part].children;
-        } else if (pathArray.length === 1 && pathArray[0] === 'root' && mockFileSystem.root) {
-             // Handles the case where pathArray is just ['root'] and currentLevelData is mockFileSystem
+        if (part === 'root' && currentLevelData === mockFileSystem && mockFileSystem.root && mockFileSystem.root.type === 'folder') {
             currentLevelData = mockFileSystem.root.children;
-            break;
-        }
-        else {
+        } else if (currentLevelData[part] && currentLevelData[part].type === 'folder') {
+            currentLevelData = currentLevelData[part].children;
+        } else { // Covers invalid segment or if path is like ['root'] and mockFileSystem.root is not a folder (already handled by validPath check later)
             console.warn('Invalid path segment:', part, 'in', pathArray.join('/'));
             validPath = false;
             break;
@@ -107,21 +101,20 @@ function _renderFileExplorerInternal(appWindow) {
                 // Re-evaluate currentLevel for file content lookup based on currentWindowPath
                 let fileParentLevelData = mockFileSystem;
                 for(const part of currentWindowPath) {
-                     if (fileParentLevelData[part] && fileParentLevelData[part].type === 'folder') {
-                        fileParentLevelData = fileParentLevelData[part].children;
-                    } else if (part === 'root' && fileParentLevelData[part] && fileParentLevelData[part].type === 'folder') {
-                        fileParentLevelData = fileParentLevelData[part].children;
-                    } else if (currentWindowPath.length === 1 && currentWindowPath[0] === 'root' && mockFileSystem.root){
+                    if (part === 'root' && fileParentLevelData === mockFileSystem && mockFileSystem.root && mockFileSystem.root.type === 'folder') {
                         fileParentLevelData = mockFileSystem.root.children;
-                        break;
+                    } else if (fileParentLevelData[part] && fileParentLevelData[part].type === 'folder') {
+                        fileParentLevelData = fileParentLevelData[part].children;
                     } else {
+                        // This break is important: if the segment isn't a folder, or doesn't exist,
+                        // fileParentLevelData remains the parent of the item we're trying to access.
                         break;
                     }
                 }
                 if (fileParentLevelData && fileParentLevelData[itemName] && fileParentLevelData[itemName].content) {
-                    alert(\`File clicked: \${itemName}\nContent: \${fileParentLevelData[itemName].content}\`);
+                    alert('File clicked: ' + itemName + '\\nContent: ' + fileParentLevelData[itemName].content);
                 } else {
-                     alert(\`File clicked: \${itemName}\nContent: Not available or error in path.\`);
+                     alert('File clicked: ' + itemName + '\\nContent: Not available or error in path.');
                 }
             }
         });

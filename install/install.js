@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    'use strict';
     const installButton = document.getElementById('installButton');
     const installMessage = document.getElementById('installMessage');
 

@@ -1,3 +1,4 @@
+'use strict';
 // --- Unified FileSystem API ---
 class FileSystem {
     constructor(driveLetter, storageAdapter) {
@@ -61,9 +62,8 @@ class FileSystem {
         const storageKey = this._getStorageKey(this.basePath);
         const rootDir = await this.storage.getItem(storageKey);
         if (!rootDir) {
-            // Simplified logging. Note: indexedDBWrapper is no longer defined here.
-            // This log might need adjustment if this code path is still used by other non-A: drives.
-            console.log(`Drive ${this.driveLetter} initialized with a custom adapter.`);
+            // Use getStorageType() for more accurate logging
+            console.log(`Drive ${this.driveLetter} initialized with ${this.getStorageType()}.`);
         }
     }
 
@@ -100,9 +100,7 @@ class FileSystem {
             try {
                 const createResult = this.storage.create(driverPath);
                 if (createResult === -1) {
-                    if (createResult === -1) {
-                        throw new Error(`Failed to create file entry (metadata) for: ${driverPath}. Parent directory might not exist.`);
-                    }
+                    throw new Error(`Failed to create file entry (metadata) for: ${driverPath}. Parent directory might not exist, or path is invalid.`);
                 }
 
                 fd = this.storage.open(driverPath, 'write');
@@ -652,58 +650,64 @@ window.os.fs = {
         return newPath;
     },
 
-    open: async function(path, flags = 'r') { // Default flags to 'r' (read)
+    open: async function(path, flags = 'r') {
         const fullPath = this._resolvePath(path);
         try {
             const { drive, path: drivePath } = window.WebOSFileSystem._getDriveAndPath(fullPath);
             if (!drive || !drive.storage || typeof drive.storage.open !== 'function') {
                 console.error(`os.fs.open: Could not get a valid driver for path '${fullPath}'.`);
-                return -1;
+                return null; // Indicate failure
             }
             let driverFlags = [];
             if (flags.includes('r') || flags.includes('read')) driverFlags.push('read');
             if (flags.includes('w') || flags.includes('write')) driverFlags.push('write');
-            // TODO: Add more flag conversions if necessary for specific drivers
 
-            const fd = drive.storage.open(drivePath, ...driverFlags);
-            if (fd === -1) {
-                 console.warn(`os.fs.open: Failed to open '${fullPath}' (driver path '${drivePath}') with flags '${driverFlags.join(',')}'`);
+            const actualFd = drive.storage.open(drivePath, ...driverFlags);
+            if (actualFd === -1) {
+                 console.warn(`os.fs.open: Driver failed to open '${fullPath}' (driver path '${drivePath}')`);
+                 return null; // Indicate failure
             }
-            return fd;
+            return { fd: actualFd, driveLetter: drive.getDriveLetter().charAt(0) }; // Return object
         } catch (e) {
             console.error(`os.fs.open: Error opening file '${fullPath}':`, e);
-            return -1;
+            return null; // Indicate failure
         }
     },
 
-    read: async function(fd) {
-        // Simplified: Assumes FD must belong to Drive A.
-        const driveA = window.WebOSFileSystem.getDrive('A');
-        if (driveA && driveA.storage && typeof driveA.storage.read === 'function') {
+    read: async function(fdObj) {
+        if (!fdObj || typeof fdObj.fd === 'undefined' || !fdObj.driveLetter) {
+            console.error("os.fs.read: Invalid FD object provided.");
+            return null;
+        }
+        const drive = window.WebOSFileSystem.getDrive(fdObj.driveLetter);
+        if (drive && drive.storage && typeof drive.storage.read === 'function') {
             try {
-                return driveA.storage.read(fd);
+                return drive.storage.read(fdObj.fd);
             } catch (e) {
-                console.error(`os.fs.read: Error reading fd '${fd}' on Drive A:`, e);
+                console.error(`os.fs.read: Error reading fd '${fdObj.fd}' on Drive ${fdObj.driveLetter}:`, e);
                 return null;
             }
         }
-        console.error("os.fs.read: Drive A not available or does not support read(fd).");
+        console.error(`os.fs.read: Drive ${fdObj.driveLetter} not available or does not support read(fd).`);
         return null;
     },
 
-    write: async function(fd, data) {
-        // Simplified: Assumes FD must belong to Drive A.
-        const driveA = window.WebOSFileSystem.getDrive('A');
-        if (driveA && driveA.storage && typeof driveA.storage.write === 'function') {
+    write: async function(fdObj, data) {
+        if (!fdObj || typeof fdObj.fd === 'undefined' || !fdObj.driveLetter) {
+            console.error("os.fs.write: Invalid FD object provided.");
+            return -1;
+        }
+        const drive = window.WebOSFileSystem.getDrive(fdObj.driveLetter);
+        if (drive && drive.storage && typeof drive.storage.write === 'function') {
             try {
-                return driveA.storage.write(fd, data);
+                return drive.storage.write(fdObj.fd, data);
             } catch (e) {
-                console.error(`os.fs.write: Error writing fd '${fd}' on Drive A:`, e);
-                return -1; // Indicate failure
+                console.error(`os.fs.write: Error writing fd '${fdObj.fd}' on Drive ${fdObj.driveLetter}:`, e);
+                return -1;
             }
         }
-        console.error("os.fs.write: Drive A not available or does not support write(fd).");
-        return -1; // Indicate failure
+        console.error(`os.fs.write: Drive ${fdObj.driveLetter} not available or does not support write(fd).`);
+        return -1;
     },
 
     create: async function(path) {
@@ -728,19 +732,22 @@ window.os.fs = {
         }
     },
 
-    close: async function(fd) {
-        // Simplified: Assumes FD must belong to Drive A.
-        const driveA = window.WebOSFileSystem.getDrive('A');
-        if (driveA && driveA.storage && typeof driveA.storage.close === 'function') {
+    close: async function(fdObj) {
+        if (!fdObj || typeof fdObj.fd === 'undefined' || !fdObj.driveLetter) {
+            console.error("os.fs.close: Invalid FD object provided.");
+            return -1;
+        }
+        const drive = window.WebOSFileSystem.getDrive(fdObj.driveLetter);
+        if (drive && drive.storage && typeof drive.storage.close === 'function') {
             try {
-                driveA.storage.close(fd);
+                drive.storage.close(fdObj.fd);
                 return 0; // Success
             } catch (e) {
-                console.error(`os.fs.close: Error closing fd '${fd}' on Drive A:`, e);
-                return -1; // Failure
+                console.error(`os.fs.close: Error closing fd '${fdObj.fd}' on Drive ${fdObj.driveLetter}:`, e);
+                return -1;
             }
         }
-        console.error("os.fs.close: Drive A not available or does not support close(fd).");
+        console.error(`os.fs.close: Drive ${fdObj.driveLetter} not available or does not support close(fd).`);
         return -1;
     },
 

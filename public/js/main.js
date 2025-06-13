@@ -1,7 +1,9 @@
 // public/js/main.js
-console.log("main.js: Initiating OS startup sequence.");
+(function() {
+    'use strict';
+    console.log("main.js: Initiating OS startup sequence.");
 
-function loadScript(url) {
+    function loadScript(url) {
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = url;
@@ -72,3 +74,4 @@ if (document.readyState === 'loading') {
 } else {
     bootstrap(); // DOMContentLoaded has already fired
 }
+})();

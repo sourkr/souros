@@ -77,5 +77,16 @@
     "permissions": ["localStorage", "indexedDB"],
     "appUrl": null,
     "isSystemApp": true
+  },
+  {
+    "id": "osUpdate",
+    "name": "OS Update",
+    "version": "1.0.0",
+    "description": "Core system application for managing OS updates.",
+    "icon": "assets/icons/cloud-arrow-down.svg",
+    "developer": "Sour OS Team",
+    "permissions": ["network", "localStorage"],
+    "appUrl": null,
+    "isSystemApp": true
   }
 ]

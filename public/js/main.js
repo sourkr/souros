@@ -1,8 +1,8 @@
 async function checkOSInstallationAndRedirect() {
     try {
         const osInstalledFlag = await window.WebOSFileSystem.readFile('A:/system/os_installed.flag');
-        if (osInstalledFlag !== 'true') {
-            console.log("OS not installed or flag not set. Redirecting to install page.");
+        if (String(osInstalledFlag) !== 'true') {
+            console.log("OS not installed or flag not set. Redirecting to install page. Flag value:", osInstalledFlag, "| Type:", typeof osInstalledFlag);
             if (!window.location.pathname.includes('/install/')) {
                  window.location.href = '/install/';
             }
@@ -74,253 +74,26 @@ async function checkOSInstallationAndRedirect() {
             id: 'fileExplorer',
             name: 'File Explorer',
             icon: 'assets/icons/folder-open.svg',
-            content: '<div class="file-explorer-main-area" style="width:100%; height:100%;"></div>' // This div will be populated by the file explorer logic
+            js_module: '/js/apps/file_explorer_app.js', // Path to the new module
+            initial_window_content: '<div class="file-explorer-main-area" style="width:100%; height:100%;"></div>' // Minimal content for the window
         },
         {
             id: 'osUpdate',
             name: 'OS Update',
             icon: 'assets/icons/cloud-arrow-down.svg',
-            content: `
-                <div style="padding: 15px; font-family: sans-serif; color: #333;">
-                    <h2>OS Update</h2>
-                    <p>Current OS Version: <span id="osUpdateCurrentVersion">1.0.0</span> (from A:/system/os_config.json)</p>
-                    <p>Available Version: <span id="osUpdateAvailableVersion">-</span></p>
-                    <button id="osCheckForUpdatesBtn" style="padding: 8px 12px; margin-right: 10px;">Check for Updates</button>
-                    <button id="osApplyUpdateBtn" style="padding: 8px 12px;" disabled>Apply Update</button>
-                    <p id="osUpdateStatus" style="margin-top: 10px;"></p>
-                    <script>
-                        // Script for OS Update App functionality (will be enhanced later)
-                        (function() {
-                            const currentVersionElem = document.getElementById('osUpdateCurrentVersion');
-                            const availableVersionElem = document.getElementById('osUpdateAvailableVersion');
-                            const checkForUpdatesBtn = document.getElementById('osCheckForUpdatesBtn');
-                            const applyUpdateBtn = document.getElementById('osApplyUpdateBtn');
-                            const statusElem = document.getElementById('osUpdateStatus');
-
-                            let latestServerVersionInfo = null; // To store fetched update info
-
-                            async function fetchCurrentOSVersion() {
-                                if (window.WebOSFileSystem) {
-                                    try {
-                                        const configStr = await window.WebOSFileSystem.readFile('A:/system/os_config.json');
-                                        if (configStr) {
-                                            const config = JSON.parse(configStr);
-                                            currentVersionElem.textContent = config.version || '1.0.0';
-                                            return config.version || '1.0.0';
-                                        }
-                                    } catch (e) {
-                                        console.error('Error reading OS config for version:', e);
-                                        currentVersionElem.textContent = 'Error';
-                                    }
-                                }
-                                return '1.0.0'; // Default if not found
-                            }
-
-                            fetchCurrentOSVersion(); // Load on app open
-
-                            checkForUpdatesBtn.addEventListener('click', async () => {
-                                statusElem.textContent = 'Checking for updates...';
-                                applyUpdateBtn.disabled = true;
-                                latestServerVersionInfo = null;
-                                const currentVersion = await fetchCurrentOSVersion();
-
-                                try {
-                                    const response = await fetch('/api/os_update_info.json');
-                                    if (!response.ok) {
-                                        throw new Error(\`HTTP error! status: \${response.status}\`);
-                                    }
-                                    const data = await response.json();
-                                    latestServerVersionInfo = data; // Store fetched info
-
-                                    availableVersionElem.textContent = data.latestVersion;
-                                    // Basic version comparison (can be improved for semantic versioning)
-                                    if (data.latestVersion > currentVersion) {
-                                        statusElem.textContent = `Update available: ${data.latestVersion} - ${data.description}`;
-                                        applyUpdateBtn.disabled = false;
-                                    } else {
-                                        statusElem.textContent = 'Your OS is up to date.';
-                                    }
-                                } catch (error) {
-                                    console.error('Error fetching update info:', error);
-                                    statusElem.textContent = 'Error checking for updates. Please try again.';
-                                    availableVersionElem.textContent = '-';
-                                }
-                            });
-
-                            applyUpdateBtn.addEventListener('click', async () => {
-                                if (!latestServerVersionInfo) {
-                                    statusElem.textContent = 'No update information available. Please check for updates first.';
-                                    return;
-                                }
-
-                                statusElem.textContent = `Applying update to ${latestServerVersionInfo.latestVersion}...`;
-                                applyUpdateBtn.disabled = true;
-
-                                // Mock apply
-                                setTimeout(async () => {
-                                    if (window.WebOSFileSystem) {
-                                        const newConfig = {
-                                            version: latestServerVersionInfo.latestVersion,
-                                            installedDate: new Date().toISOString(),
-                                            lastUpdateCheck: new Date().toISOString() // Add more info if needed
-                                        };
-                                        try {
-                                            await window.WebOSFileSystem.writeFile('A:/system/os_config.json', JSON.stringify(newConfig));
-                                            currentVersionElem.textContent = newConfig.version;
-                                            availableVersionElem.textContent = '-'; // Clear available version
-                                            latestServerVersionInfo = null; // Clear fetched info
-                                            statusElem.textContent = `OS updated successfully to ${newConfig.version}! Restart might be required (not simulated).`;
-                                        } catch (e) {
-                                            console.error('Error writing updated OS config:', e);
-                                            statusElem.textContent = 'Update failed (Error writing config).';
-                                            applyUpdateBtn.disabled = false; // Re-enable button on failure
-                                        }
-                                    } else {
-                                        statusElem.textContent = 'Update failed (FileSystem not available).';
-                                        applyUpdateBtn.disabled = false; // Re-enable button on failure
-                                    }
-                                }, 1500); // Simulate delay
-                            });
-                        })();
-                    </script>
-                </div>
-            `
+            js_module: '/js/apps/os_update_app.js' // Path to the new module
         },
         {
             id: 'appStore',
             name: 'App Store',
             icon: 'assets/icons/store.svg',
-            content: `
-                <div style="padding: 15px; font-family: sans-serif; color: #333; height: 100%; display: flex; flex-direction: column;">
-                    <h2>App Store</h2>
-                    <div id="appStoreAvailableApps" style="flex-grow: 1; overflow-y: auto; border: 1px solid #eee; padding: 10px; margin-bottom: 10px;">
-                        <p>Loading apps...</p>
-                    </div>
-                    <div id="appStoreStatus" style="margin-top: 10px; min-height: 20px;"></div>
-                    <script>
-                        // Script for App Store App functionality (will be enhanced later)
-                        (function() {
-                            const availableAppsContainer = document.getElementById('appStoreAvailableApps');
-                            const statusElem = document.getElementById('appStoreStatus');
-                            let installedApps = {};
-                            let catalogApps = []; // To store apps from API
-
-                            async function loadInstalledAppsManifest() {
-                                if (window.WebOSFileSystem) {
-                                    try {
-                                        if (!window.WebOSFileSystem.getDrive('B')) {
-                                            console.warn('Drive B (IndexedDB) not available for App Store manifest.');
-                                        } else {
-                                            await window.WebOSFileSystem.createDirectory('B:/apps');
-                                        }
-                                        const manifestStr = await window.WebOSFileSystem.readFile('B:/apps/installed_manifest.json');
-                                        if (manifestStr) {
-                                            installedApps = JSON.parse(manifestStr);
-                                        }
-                                    } catch (e) {
-                                        console.log('No app manifest found or error reading it (B:/apps/installed_manifest.json). Assuming no apps installed via store yet.', e);
-                                        installedApps = {};
-                                        if (window.WebOSFileSystem.getDrive('B')) {
-                                           try {
-                                               await window.WebOSFileSystem.writeFile('B:/apps/installed_manifest.json', JSON.stringify({}));
-                                           } catch (initError) {
-                                               console.error("Failed to initialize app manifest on Drive B:", initError);
-                                           }
-                                        }
-                                    }
-                                }
-                            }
-
-                            async function saveInstalledAppsManifest() {
-                                if (window.WebOSFileSystem && window.WebOSFileSystem.getDrive('B')) {
-                                    try {
-                                        await window.WebOSFileSystem.writeFile('B:/apps/installed_manifest.json', JSON.stringify(installedApps));
-                                    } catch (saveError) {
-                                        console.error("Failed to save app manifest on Drive B:", saveError);
-                                        statusElem.textContent = 'Error saving app installation status.';
-                                    }
-                                }
-                            }
-
-                            function renderApps() {
-                                availableAppsContainer.innerHTML = '';
-                                if (catalogApps.length === 0) {
-                                    // This message will be shown if catalog is empty or failed to load
-                                    // The catch block in the IIFE will set a more specific error message in statusElem if fetch fails
-                                    availableAppsContainer.innerHTML = '<p>No apps available at the moment. Check status below.</p>';
-                                    return;
-                                }
-                                catalogApps.forEach(app => {
-                                    const appEntry = document.createElement('div');
-                                    appEntry.style.borderBottom = '1px solid #eee';
-                                    appEntry.style.paddingBottom = '10px';
-                                    appEntry.style.marginBottom = '10px';
-
-                                    let appIconHtml = app.icon ? `<img src="${app.icon}" alt="${app.name}" style="width: 24px; height: 24px; vertical-align: middle; margin-right: 10px;">` : '';
-
-                                    appEntry.innerHTML = `
-                                        ${appIconHtml}
-                                        <strong>${app.name}</strong> (v${app.version}) <em style="font-size:0.8em; color: #555;">by ${app.developer || 'Unknown Dev'}</em>
-                                        <p style="font-size: 0.9em; margin: 5px 0;">${app.description}</p>
-                                        <p style="font-size: 0.8em; color: #777;">Permissions: ${app.permissions && app.permissions.length > 0 ? app.permissions.join(', ') : 'none'}</p>
-                                    `;
-
-                                    const installButton = document.createElement('button');
-                                    installButton.style.padding = '5px 10px';
-
-                                    if (installedApps[app.id]) {
-                                        if (installedApps[app.id] < app.version) {
-                                            installButton.textContent = 'Update to v' + app.version;
-                                            installButton.onclick = () => handleInstallOrUpdate(app, true);
-                                        } else {
-                                            installButton.textContent = 'Installed (v' + installedApps[app.id] + ')';
-                                            installButton.disabled = true;
-                                        }
-                                    } else {
-                                        installButton.textContent = 'Install';
-                                        installButton.onclick = () => handleInstallOrUpdate(app, false);
-                                    }
-
-                                    appEntry.appendChild(installButton);
-                                    availableAppsContainer.appendChild(appEntry);
-                                });
-                            }
-
-                            async function handleInstallOrUpdate(app, isUpdate) {
-                                if (!window.WebOSFileSystem.getDrive('B')) {
-                                    statusElem.textContent = 'Drive B (for app installations) is not available.';
-                                    console.error('Drive B not available for app installation/update.');
-                                    return;
-                                }
-                                statusElem.textContent = `${isUpdate ? 'Updating' : 'Installing'} ${app.name}...`;
-                                setTimeout(async () => {
-                                    installedApps[app.id] = app.version;
-                                    await saveInstalledAppsManifest();
-                                    statusElem.textContent = `${app.name} ${isUpdate ? 'updated' : 'installed'} successfully to v${app.version}! (Restart WebOS or App Store to see changes in main app list - not simulated).`;
-                                    renderApps();
-                                    console.warn("App '" + app.name + "' processed. Manual refresh or advanced inter-app communication needed to see it live in desktop.");
-                                }, 1500);
-                            }
-
-                            (async () => { // Main IIFE for the app
-                                await loadInstalledAppsManifest();
-                                try {
-                                    const response = await fetch('/api/app_store_catalog.json');
-                                    if (!response.ok) {
-                                        throw new Error(\`HTTP error! status: \${response.status}\`);
-                                    }
-                                    catalogApps = await response.json();
-                                } catch (error) {
-                                    console.error('Error fetching app catalog:', error);
-                                    statusElem.textContent = 'Could not load app catalog: ' + error.message;
-                                    catalogApps = []; // Ensure it's an empty array on error
-                                }
-                                renderApps();
-                            })();
-                        })();
-                    </script>
-                </div>
-            `
+            js_module: '/js/apps/app_store_app.js' // Path to the new module
+        },
+        {
+            id: 'terminal',
+            name: 'Terminal',
+            icon: 'assets/icons/puzzle-piece.svg', // Placeholder icon, update if a terminal icon exists
+            js_module: '/js/apps/terminal_app.js' // Path to the new module
         }
     ];
 
@@ -348,9 +121,8 @@ async function checkOSInstallationAndRedirect() {
     }
 
     // --- Windowing System ---
-    function openWindow(app) {
+    async function openWindow(app) { // Made async to support dynamic imports
         if (openWindows[app.id]) {
-            // Focus existing window if already open
             openWindows[app.id].style.zIndex = ++highestZIndex;
             return;
         }
@@ -359,355 +131,92 @@ async function checkOSInstallationAndRedirect() {
         const windowDiv = document.createElement('div');
         windowDiv.className = 'window';
         windowDiv.setAttribute('data-app-id', app.id);
-        windowDiv.style.left = Math.random() * (desktop.offsetWidth - 300) + 'px'; // Random position
-        windowDiv.style.top = Math.random() * (desktop.offsetHeight - 250 - 40) + 'px'; // Random position, avoid taskbar
-        windowDiv.style.width = '400px'; // Default width
-        windowDiv.style.height = '300px'; // Default height
+        // Default position and size, can be overridden by app specific settings later
+        windowDiv.style.left = Math.random() * (desktop.offsetWidth - 400) + 'px';
+        windowDiv.style.top = Math.random() * (desktop.offsetHeight - 340) + 'px'; // Avoid taskbar (40px)
+        windowDiv.style.width = '400px';
+        windowDiv.style.height = '300px';
         windowDiv.style.zIndex = highestZIndex;
 
-        // Header
         const header = document.createElement('div');
         header.className = 'window-header';
-
         const title = document.createElement('span');
         title.className = 'title';
         title.textContent = app.name;
-
         const controls = document.createElement('div');
         controls.className = 'controls';
         const closeButton = document.createElement('button');
         closeButton.className = 'close-btn';
-        closeButton.innerHTML = '&times;'; // '×' character
+        closeButton.innerHTML = '&times;';
         closeButton.addEventListener('click', () => closeWindow(app.id));
-
         controls.appendChild(closeButton);
         header.appendChild(title);
         header.appendChild(controls);
 
-        // Content
         const contentDiv = document.createElement('div');
         contentDiv.className = 'window-content';
-        // For File Explorer, the content div is initially empty or a placeholder,
-        // renderFileExplorer will populate it.
-        if (app.id !== 'fileExplorer') {
-            contentDiv.innerHTML = app.content; // In a real app, you'd build this more securely
-        } else {
-            // Ensure the specific div for file explorer is there as defined in apps array
-             contentDiv.innerHTML = app.content; // This should create the .file-explorer-main-area
-        }
 
         windowDiv.appendChild(header);
         windowDiv.appendChild(contentDiv);
         windowContainer.appendChild(windowDiv);
-
-        openWindows[app.id] = windowDiv; // Track open window
-
+        openWindows[app.id] = windowDiv;
         makeDraggable(windowDiv, header);
 
         windowDiv.addEventListener('mousedown', () => {
-             windowDiv.style.zIndex = ++highestZIndex;
+            windowDiv.style.zIndex = ++highestZIndex;
         });
 
-        if (app.id === 'fileExplorer') {
-            windowDiv.dataset.currentPath = JSON.stringify(['root']); // Initial path for this window
-            const feMainArea = windowDiv.querySelector('.file-explorer-main-area');
-            if (feMainArea) {
-                 renderFileExplorer(windowDiv, JSON.parse(windowDiv.dataset.currentPath));
-            } else {
-                console.error("File Explorer main area not found on window creation.");
-            }
-        }
-    }
-
-    function initializeTerminal(appWindow) {
-        const outputElement = appWindow.querySelector('.terminal-output');
-        const inputElement = appWindow.querySelector('.terminal-input');
-        const promptElement = appWindow.querySelector('.terminal-prompt');
-
-        appWindow.dataset.terminalCwd = "A:/";
-        appWindow.dataset.terminalHistory = JSON.stringify([]);
-        appWindow.dataset.terminalHistoryIndex = "-1";
-
-        const appendOutput = (text, type = 'info') => {
-            const line = document.createElement('div');
-            if (type === 'command') {
-                line.textContent = `${promptElement.textContent}${text}`;
-                line.style.color = "#80ccff"; // Light blue for commands
-            } else if (type === 'error') {
-                line.textContent = `Error: ${text}`;
-                line.style.color = "#ff8080"; // Light red for errors
-            } else if (type === 'system') {
-                 line.textContent = `SYSTEM: ${text}`;
-                 line.style.color = "#a0a0a0"; // Grey for system messages
-            }
-             else {
-                line.textContent = text;
-            }
-            outputElement.appendChild(line);
-            outputElement.scrollTop = outputElement.scrollHeight;
-        };
-
-        const updatePrompt = () => {
-            promptElement.textContent = `${appWindow.dataset.terminalCwd}> `;
-        };
-
-        const resolvePath = (path) => {
-            if (!path || path.trim() === '') return appWindow.dataset.terminalCwd;
-            if (path.includes(':')) return path.endsWith('/') ? path : path + '/'; // Absolute path
-
-            let currentCwd = appWindow.dataset.terminalCwd; // e.g., "A:/" or "A:/folder/"
-            if (!currentCwd.endsWith('/')) currentCwd += '/';
-
-            if (path === '.') return currentCwd;
-            if (path === '..') {
-                if (currentCwd.endsWith(':/')) return currentCwd; // Already at root of drive
-                return currentCwd.substring(0, currentCwd.slice(0, -1).lastIndexOf('/') + 1);
-            }
-            return currentCwd + path + (path.endsWith('/') ? '' : '/');
-        };
-
-
-        const executeCommand = async (fullCommand) => {
-            appendOutput(fullCommand, 'command');
-            const [command, ...args] = fullCommand.trim().split(/\s+/);
-            const history = JSON.parse(appWindow.dataset.terminalHistory);
-            if (fullCommand.trim() !== "" && (history.length === 0 || history[history.length -1] !== fullCommand.trim())) {
-                 history.push(fullCommand.trim());
-            }
-            appWindow.dataset.terminalHistory = JSON.stringify(history);
-            appWindow.dataset.terminalHistoryIndex = history.length;
-
-
-            switch (command.toLowerCase()) {
-                case 'help':
-                    appendOutput("Available commands:\n" +
-                        "  help                       - Shows this help message\n" +
-                        "  ls [path]                  - Lists directory contents\n" +
-                        "  cat <filePath>             - Displays file content\n" +
-                        "  echo [text ...]            - Displays text\n" +
-                        "  clear                      - Clears the terminal output\n" +
-                        "  cd <path>                  - Changes current directory");
-                    break;
-                case 'ls':
-                    try {
-                        const targetPath = args.length > 0 ? resolvePath(args.join(' ')) : appWindow.dataset.terminalCwd;
-                        const items = await WebOSFileSystem.listDirectory(targetPath);
-                        if (items.length === 0) {
-                            appendOutput("Directory is empty.");
-                        } else {
-                            items.forEach(item => appendOutput(`${item.type === 'directory' ? '[D]' : '[F]'} ${item.name}`));
-                        }
-                    } catch (e) {
-                        appendOutput(e.message, 'error');
-                    }
-                    break;
-                case 'cat':
-                    if (args.length === 0) {
-                        appendOutput("Usage: cat <filePath>", 'error');
-                        break;
-                    }
-                    try {
-                        const filePath = resolvePath(args.join(' ')).replace(/\/$/, ''); // remove trailing slash for files
-                        const content = await WebOSFileSystem.readFile(filePath);
-                        if (typeof content === 'object') {
-                           appendOutput(JSON.stringify(content, null, 2));
-                        } else {
-                           appendOutput(content);
-                        }
-                    } catch (e) {
-                        appendOutput(e.message, 'error');
-                    }
-                    break;
-                case 'echo':
-                    appendOutput(args.join(' '));
-                    break;
-                case 'clear':
-                    outputElement.innerHTML = '';
-                    break;
-                case 'cd':
-                    if (args.length === 0) {
-                        appendOutput("Usage: cd <path>", 'error');
-                        break;
-                    }
-                    try {
-                        const newPathArg = args.join(' ');
-                        let newPotentialPath = resolvePath(newPathArg);
-                        if (!newPotentialPath.endsWith('/')) newPotentialPath += '/';
-
-                        // Check if path exists and is a directory
-                        // WebOSFileSystem.exists might need to understand directory paths (ending with /)
-                        // A simple way: try to list it. If it fails, or lists nothing and it's not the same path, it's an issue.
-                        // Or, if WebOSFileSystem.exists can confirm a directory, use that.
-                        // For now, we assume any path given to cd could be valid and just set it.
-                        // A robust 'cd' would verify the path is a valid directory.
-                        // Let's try a pseudo-validation: list and see if it errors or is a known file
-
-                        if (newPathArg.includes(':') && newPathArg.endsWith(':') && newPathArg.length === 2) { // e.g. "A:"
-                             appWindow.dataset.terminalCwd = newPathArg + "/";
-                        } else if (await WebOSFileSystem.exists(newPotentialPath) || await WebOSFileSystem.exists(newPotentialPath.slice(0,-1))) {
-                            // Try listing to confirm it's directory-like.
-                            // This is a bit of a hack. A proper 'isDirectory' or 'stat' function in FileSystem would be better.
-                            let isDir = false;
-                            try {
-                                await WebOSFileSystem.listDirectory(newPotentialPath); // Throws if it's a file or invalid
-                                isDir = true;
-                            } catch(e_isDir) {
-                                // If newPotentialPath is "C:/quota.txt/", listDirectory would fail.
-                                // If it was "C:/", listDirectory on persistentStorageApiWrapper would work.
-                                // If it was "A:/file.txt/", listDirectory would fail.
-                                // We also need to handle if the path *is* a file.
-                                const fileContent = await WebOSFileSystem.readFile(newPotentialPath.slice(0,-1));
-                                if(fileContent !== null) { // It's a file
-                                     isDir = false;
-                                     appendOutput(`Path is a file: ${newPotentialPath.slice(0,-1)}`, 'error');
-                                } else {
-                                     isDir = true; // If readFile is null, it might be a dir or non-existent
-                                }
-                            }
-
-                            if(isDir){
-                                appWindow.dataset.terminalCwd = newPotentialPath;
-                            }
-                        } else {
-                             appendOutput(`Path not found: ${newPotentialPath}`, 'error');
-                        }
-                    } catch (e) {
-                        appendOutput(e.message, 'error');
-                    }
-                    break;
-                default:
-                    if (command.trim() !== '') {
-                        appendOutput(`Unknown command: ${command}`, 'error');
-                    }
-            }
-            updatePrompt();
-            inputElement.value = '';
-            inputElement.focus();
-        };
-
-        inputElement.addEventListener('keydown', (e) => {
-            const history = JSON.parse(appWindow.dataset.terminalHistory);
-            let historyIndex = parseInt(appWindow.dataset.terminalHistoryIndex, 10);
-
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                executeCommand(inputElement.value);
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (history.length > 0 && historyIndex > 0) {
-                    historyIndex--;
-                } else if (history.length > 0 && historyIndex <= 0) {
-                    historyIndex = 0; // Stay on the first item
+        // --- App Content Loading Logic ---
+        if (app.js_module) {
+            try {
+                // Set initial content for apps that define it (e.g. file explorer's main area div)
+                if (app.initial_window_content) {
+                    contentDiv.innerHTML = app.initial_window_content;
                 }
-                 if(history[historyIndex]) inputElement.value = history[historyIndex];
-                 appWindow.dataset.terminalHistoryIndex = historyIndex;
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (history.length > 0 && historyIndex < history.length - 1) {
-                    historyIndex++;
-                     if(history[historyIndex]) inputElement.value = history[historyIndex];
-                } else {
-                    historyIndex = history.length; // Point after last item
-                    inputElement.value = ''; // Clear for new command
+
+                const module = await import(app.js_module);
+                let initFunctionName = '';
+                switch (app.id) {
+                    case 'osUpdate':
+                        initFunctionName = 'initOsUpdateApp';
+                        break;
+                    case 'appStore':
+                        initFunctionName = 'initAppStoreApp';
+                        break;
+                    case 'fileExplorer':
+                        initFunctionName = 'initFileExplorerApp';
+                        break;
+                    case 'terminal':
+                        initFunctionName = 'initTerminalApp';
+                        break;
+                    default:
+                        console.error(`No init function mapping for app: ${app.id}`);
+                        contentDiv.innerHTML = `<p>Error: Could not load app module for ${app.name}.</p>`;
+                        return;
                 }
-                appWindow.dataset.terminalHistoryIndex = historyIndex;
-            }
-        });
 
-        updatePrompt();
-        inputElement.focus();
-        appendOutput("Sour OS Terminal [Version 1.0.0]", "system");
-        appendOutput("Type 'help' for a list of commands.", "system");
-    }
-
-    async function renderFileExplorer(appWindow, currentPathString) {
-        const targetDiv = appWindow.querySelector('.file-explorer-main-area');
-        if (!targetDiv) {
-            console.error("Target div for file explorer not found in window:", appWindow);
-            return;
-        }
-
-        let currentLevelData = mockFileSystem;
-        let validPath = true;
-        for (const part of pathArray) {
-            if (currentLevelData[part] && currentLevelData[part].type === 'folder') {
-                currentLevelData = currentLevelData[part].children;
-            } else {
-                // Path part not found or not a folder, try to recover or show error
-                console.warn('Invalid path segment:', part, 'in', pathArray.join('/'));
-                validPath = false;
-                break;
-            }
-        }
-
-        if (!validPath || typeof currentLevelData !== 'object') {
-            // Attempt to reset to root if path became invalid
-            // Or if currentLevelData is not an object (e.g. points to a file's children)
-            pathArray = ['root'];
-            appWindow.dataset.currentPath = JSON.stringify(pathArray);
-            currentLevelData = mockFileSystem.root.children;
-            console.warn('Path was invalid or led to non-folder, reset to root. Displaying root children.');
-        }
-
-
-        let html = '<div class="fe-nav" style="padding: 5px; background: #eee; border-bottom: 1px solid #ccc;">';
-        html += `<button class="fe-up-btn" ${pathArray.length <= 1 ? 'disabled' : ''}>Up</button> `;
-        html += `<span>Path: /${pathArray.join('/')}</span>`; // Display full path from root
-        html += '</div>';
-        html += '<ul class="fe-item-list" style="list-style: none; padding: 5px; margin: 0; height: calc(100% - 30px); overflow-y: auto;">';
-
-        for (const itemName in currentLevelData) {
-            const item = currentLevelData[itemName];
-            const icon = item.type === 'folder' ? '&#128193;' : '&#128196;'; // Folder and File icons
-            html += `<li class="fe-item" data-name="${itemName}" data-type="${item.type}" style="padding: 3px; cursor: pointer; user-select:none;">`;
-            html += `<span class="fe-item-icon">${icon}</span> ${itemName}`;
-            html += '</li>';
-        }
-        html += '</ul>';
-        targetDiv.innerHTML = html;
-
-        // Add event listeners
-        appWindow.querySelectorAll('.fe-item').forEach(itemElem => {
-            itemElem.addEventListener('click', () => {
-                const itemName = itemElem.getAttribute('data-name');
-                const itemType = itemElem.getAttribute('data-type');
-                // Get current path from window dataset
-                let currentWindowPath = JSON.parse(appWindow.dataset.currentPath);
-
-                if (itemType === 'folder') {
-                    const newPath = [...currentWindowPath, itemName];
-                    appWindow.dataset.currentPath = JSON.stringify(newPath);
-                    renderFileExplorer(appWindow, newPath);
-                } else {
-                    // Re-evaluate currentLevel for file content lookup based on currentWindowPath
-                    let fileParentLevel = mockFileSystem;
-                    for(const part of currentWindowPath) {
-                        if(fileParentLevel[part] && fileParentLevel[part].type === 'folder') {
-                            fileParentLevel = fileParentLevel[part].children;
-                        } else {
-                            // Should not happen if path is correct
-                            break;
-                        }
-                    }
-                    if (fileParentLevel[itemName] && fileParentLevel[itemName].content) {
-                        alert(`File clicked: ${itemName}\nContent: ${fileParentLevel[itemName].content}`);
+                if (module[initFunctionName] && typeof module[initFunctionName] === 'function') {
+                    // Pass contentDiv (appContainer) and windowDiv (appWindow)
+                    // Some apps might only need contentDiv, others might need windowDiv for datasets etc.
+                    if (app.id === 'fileExplorer' || app.id === 'terminal') {
+                         module[initFunctionName](contentDiv, windowDiv);
                     } else {
-                         alert(`File clicked: ${itemName}\nContent: Not available or error in path.`);
+                         module[initFunctionName](contentDiv);
                     }
+                } else {
+                    console.error(`Init function '${initFunctionName}' not found in module ${app.js_module}`);
+                    contentDiv.innerHTML = `<p>Error: Could not initialize ${app.name}.</p>`;
                 }
-            });
-        });
 
-        const upButton = appWindow.querySelector('.fe-up-btn');
-        if (upButton) {
-            upButton.addEventListener('click', () => {
-                let currentWindowPath = JSON.parse(appWindow.dataset.currentPath);
-                if (currentWindowPath.length > 1) {
-                    const newPath = currentWindowPath.slice(0, -1);
-                    appWindow.dataset.currentPath = JSON.stringify(newPath);
-                    renderFileExplorer(appWindow, newPath);
-                }
-            });
+            } catch (error) {
+                console.error(`Error loading or initializing app module ${app.js_module} for ${app.name}:`, error);
+                contentDiv.innerHTML = `<p>Error loading ${app.name}: ${error.message}</p>`;
+            }
+        } else if (app.content) {
+            // For simple apps with direct HTML content
+            contentDiv.innerHTML = app.content;
+        } else {
+            contentDiv.innerHTML = '<p>App content not available.</p>';
         }
     }
 

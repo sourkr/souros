@@ -28,100 +28,6 @@ const localStorageWrapper = {
     }
 };
 
-// Persistent Storage Manager (for navigator.storage API)
-const persistentStorageManager = {
-    isPersistent: async function() {
-        if (navigator.storage && navigator.storage.persisted) {
-            return await navigator.storage.persisted();
-        }
-        console.warn("Persistent Storage API (persisted) not supported.");
-        return false;
-    },
-    requestPersistence: async function() {
-        if (navigator.storage && navigator.storage.persist) {
-            try {
-                const result = await navigator.storage.persist();
-                console.log("Persistence requested, result:", result);
-                return result;
-            } catch (error) {
-                console.error("Error requesting persistence:", error);
-                return false;
-            }
-        }
-        console.warn("Persistent Storage API (persist) not supported.");
-        return false;
-    },
-    getEstimate: async function() {
-        if (navigator.storage && navigator.storage.estimate) {
-            try {
-                const estimate = await navigator.storage.estimate();
-                console.log("Storage estimate:", estimate);
-                return estimate;
-            } catch (error) {
-                console.error("Error getting storage estimate:", error);
-                return { usage: 0, quota: 0, error: error.message };
-            }
-        }
-        console.warn("Persistent Storage API (estimate) not supported.");
-        return { usage: 0, quota: 0, warning: "API not supported" };
-    }
-};
-
-// Wrapper for Persistent Storage API to be used by FileSystem (Drive C:)
-const persistentStorageApiWrapper = {
-    // Define a basePath similar to FileSystem for path normalization, though not strictly used by getItem itself yet
-    basePath: 'C:/',
-
-    getItem: async function(key) {
-        // Normalize key: remove drive letter, ensure no leading/trailing slashes for direct comparison
-        const normalizedKey = key.startsWith(this.basePath) ? key.substring(this.basePath.length) : key.replace(/^\/?/, '').replace(/\/$/, '');
-
-        if (normalizedKey === 'quota.txt') {
-            const estimate = await persistentStorageManager.getEstimate();
-            return JSON.stringify(estimate, null, 2);
-        }
-        if (normalizedKey === 'status.txt') {
-            const isPersistent = await persistentStorageManager.isPersistent();
-            return `Persistence Status: ${isPersistent ? 'Enabled' : 'Disabled/Not Granted'}\n\nTo request persistence, you can call:\nnavigator.storage.persist().then(granted => console.log('Persistence granted:', granted));`;
-        }
-        // This is for FileSystem.listDirectory to recognize the root "directory"
-        if (key === this.basePath || key === this.basePath.slice(0, -1) || normalizedKey === '') {
-             return JSON.stringify({type: "directory", entries: {'quota.txt': {type: 'file'}, 'status.txt': {type: 'file'}}, created: Date.now()});
-        }
-        console.log(`persistentStorageApiWrapper: getItem(${key}) normalized to '${normalizedKey}' - not found`);
-        return null;
-    },
-    setItem: function(key, value) {
-        console.warn(`Drive C: (${key}) is informational and read-only. SetItem is not supported.`);
-        return Promise.resolve();
-    },
-    removeItem: function(key) {
-        console.warn(`Drive C: (${key}) is informational and read-only. RemoveItem is not supported.`);
-        return Promise.resolve();
-    },
-    clear: function() {
-        console.warn("Drive C: is informational and read-only. Clear is not supported.");
-        return Promise.resolve();
-    },
-    getAllItems: async function() {
-        const estimate = await persistentStorageManager.getEstimate();
-        const isPersistent = await persistentStorageManager.isPersistent();
-        return {
-            // These keys are relative to the root of the drive.
-            'quota.txt': JSON.stringify(estimate, null, 2),
-            'status.txt': `Persistence Status: ${isPersistent ? 'Enabled' : 'Disabled/Not Granted'}`
-        };
-    },
-    key: function(index) {
-        if (index === 0) return 'quota.txt';
-        if (index === 1) return 'status.txt';
-        return null;
-    },
-    length: function() {
-        return 2;
-    }
-};
-
 // IndexedDB Wrapper
 const indexedDBWrapper = {
     dbName: 'WebOS_FS_IndexedDB',
@@ -473,27 +379,9 @@ class FileSystem {
 
     async listDirectory(dirPath = '') {
         const normalizedDirPath = this._normalizePath(dirPath + '/'); // Ensure it ends with a slash for dir
-        console.log(`Listing directory: ${normalizedDirPath} using adapter type ${this.getStorageType()}`);
+        console.log(`Listing directory: ${normalizedDirPath}`);
 
-        // Handle Drive C (PersistentStorageAPI) specifically for listing
-        if (this.storage === persistentStorageApiWrapper) {
-            // persistentStorageApiWrapper.getAllItems() returns an object like {'quota.txt': "...", 'status.txt': "..."}
-            // These are all considered to be in the "root" of this informational drive.
-            // We only list items if the requested path is the root of Drive C.
-            if (normalizedDirPath === this.basePath) { // e.g., C:/
-                const items = await this.storage.getAllItems(); // This gets {'quota.txt': ..., 'status.txt': ...}
-                return Object.keys(items).map(key => ({
-                    name: key, // 'quota.txt', 'status.txt'
-                    type: 'file' // All items in persistentStorageApiWrapper are virtual files
-                }));
-            } else {
-                // No subdirectories are defined or supported for this drive type
-                console.log(`No subdirectories supported for Drive C. Path: ${normalizedDirPath}`);
-                return [];
-            }
-        }
-
-        // Attempt to read the directory object itself first (for localStorageWrapper and indexedDBWrapper)
+        // Attempt to read the directory object itself first
         const dirObjectString = await this.storage.getItem(normalizedDirPath);
         if (dirObjectString) {
             try {
@@ -630,7 +518,6 @@ class FileSystem {
     getStorageType() {
         if (this.storage === localStorageWrapper) return 'localStorage';
         if (this.storage === indexedDBWrapper) return 'IndexedDB';
-        if (this.storage === persistentStorageApiWrapper) return 'PersistentStorageAPI';
         return 'unknown';
     }
 }
@@ -640,7 +527,6 @@ class FileSystem {
 const Drives = {
     A: new FileSystem('A:', localStorageWrapper), // Drive A uses localStorage
     B: window.indexedDB ? new FileSystem('B:', indexedDBWrapper) : null, // Drive B uses IndexedDB, if available
-    C: (navigator.storage && navigator.storage.estimate) ? new FileSystem('C:', persistentStorageApiWrapper) : null,
 
     getDrive: function(letter) {
         const drive = letter.toUpperCase();

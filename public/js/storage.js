@@ -1,104 +1,16 @@
-// IndexedDB Wrapper
-const indexedDBWrapper = {
-    dbName: 'WebOS_FS_IndexedDB',
-    storeName: 'filesStore',
-    db: null,
-
-    openDB: function() {
-        return new Promise((resolve, reject) => {
-            if (this.db) {
-                resolve(this.db);
-                return;
-            }
-            const request = indexedDB.open(this.dbName, 1);
-            request.onerror = (event) => reject('Error opening IndexedDB: ' + event.target.errorCode);
-            request.onsuccess = (event) => {
-                this.db = event.target.result;
-                resolve(this.db);
-            };
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    db.createObjectStore(this.storeName, { keyPath: 'id' });
-                }
-            };
-        });
-    },
-
-    setItem: async function(id, value) {
-        const db = await this.openDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([this.storeName], 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.put({ id: id, value: value });
-            request.onsuccess = () => resolve();
-            request.onerror = (event) => reject('Error writing to IndexedDB: ' + event.target.errorCode);
-        });
-    },
-
-    getItem: async function(id) {
-        const db = await this.openDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.get(id);
-            request.onsuccess = (event) => resolve(event.target.result ? event.target.result.value : null);
-            request.onerror = (event) => reject('Error reading from IndexedDB: ' + event.target.errorCode);
-        });
-    },
-
-    removeItem: async function(id) {
-        const db = await this.openDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([this.storeName], 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.delete(id);
-            request.onsuccess = () => resolve();
-            request.onerror = (event) => reject('Error deleting from IndexedDB: ' + event.target.errorCode);
-        });
-    },
-
-    clear: async function() {
-        const db = await this.openDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([this.storeName], 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.clear();
-            request.onsuccess = () => resolve();
-            request.onerror = (event) => reject('Error clearing IndexedDB: ' + event.target.errorCode);
-        });
-    },
-
-    getAllItems: async function() {
-        const db = await this.openDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.getAll(); // Use getAll() for simplicity
-            request.onsuccess = (event) => {
-                const items = {};
-                event.target.result.forEach(item => {
-                    items[item.id] = item.value;
-                });
-                resolve(items);
-            };
-            request.onerror = (event) => reject('Error getting all items from IndexedDB: ' + event.target.errorCode);
-        });
-    }
-};
-
 // Persistent Storage Wrapper (using localStorage by default, can be configured)
 const persistentStorageWrapper = {
-    driver: window.indexedDB ? indexedDBWrapper : null, // Default to IndexedDB if available, else null
+    driver: null, // Driver should be explicitly set by kernal or a specific driver module.
 
     setDriver: function(driverInstance) {
         this.driver = driverInstance;
-        if (driverInstance === indexedDBWrapper) {
-            console.log("Persistent storage driver set to: IndexedDB");
-        } else if (driverInstance === null) {
-            console.log("Persistent storage driver set to: null");
+        // Log based on some property of driverInstance if possible, or a generic message
+        if (this.driver && typeof this.driver.getStorageType === 'function') {
+             console.log(`Persistent storage driver set to: ${this.driver.getStorageType()}`);
+        } else if (this.driver) {
+             console.log("Persistent storage driver set to a custom driver.");
         } else {
-            console.log("Persistent storage driver set to: custom (unknown type)");
+             console.log("Persistent storage driver set to: null");
         }
     },
 
@@ -108,7 +20,14 @@ const persistentStorageWrapper = {
     },
 
     isUsingIndexedDB: function() {
-        return this.driver === indexedDBWrapper;
+        if (!this.driver) return false;
+        // This is a placeholder. A robust way would be for the driver passed to setDriver
+        // to have a property like `type: 'IndexedDB'`.
+        // For now, if a driver is set, it *could* be the IndexedDB one.
+        // The console log in setDriver can give a hint.
+        console.warn("isUsingIndexedDB() may not be fully accurate as it depends on the set driver's characteristics.");
+        // A simple check could be if it has an openDB method, characteristic of our IDB implementations
+        return typeof this.driver.openDB === 'function';
     },
 
     getItem: function(key) {
@@ -380,80 +299,62 @@ class FileSystem {
     async readFile(filePath) {
         if (this.isNewLocalStorageDriver) {
             const driverPath = this._getDriverPath(filePath);
-            let fd = -1; // Outer fd, correctly declared
-            try { // Outer try
-                // let fd = -1; // This is the duplicated declaration to be removed
-                try { // Inner try
-                    fd = this.storage.open(driverPath, 'r'); // read-only
+            let fd = -1;
+            try { // This is the main try for all driver operations (open, stat, read, close)
+                fd = this.storage.open(driverPath, 'r');
                 if (fd === -1) {
-                    // console.warn(`File not found or could not be opened for reading (new driver): ${driverPath}`);
-                    // Standard behavior is often to throw an error or return null.
-                    // Let's be consistent with old logic: return null.
+                    // console.warn(`File not found or could not be opened (new driver): ${driverPath}`);
                     return null;
                 }
 
                 const stat = this.storage.stat(fd);
-                if (!stat) { // stat itself failed or returned nullish
+                if (!stat) {
                     this.storage.close(fd);
                     fd = -1;
-                    console.warn(`Stat failed after open (new driver): ${driverPath}`);
-                    // This case implies an issue with an opened file, potentially.
-                    // Or stat is designed to be called on an fd that might be invalid after all.
-                    // Driver's stat(fd) returns table entry or null if fd is not in fds map.
-                    // If open succeeded, fd should be in fds map.
+                    // console.warn(`Stat failed after open (new driver): ${driverPath}`);
                     return null;
                 }
 
                 if (stat.type !== 'file') {
                     this.storage.close(fd);
                     fd = -1;
-                    console.warn(`Not a file (new driver): ${driverPath}, type: ${stat.type}`);
-                    return null; // Or throw error, as it's not a file
+                    // console.warn(`Not a file (new driver): ${driverPath}, type: ${stat.type}`);
+                    return null;
                 }
 
-                // The localstorage-driver's read(fd) returns the content string or null on error.
                 const content = this.storage.read(fd);
-
+                // It's important to close fd before any early returns if content is null,
+                // but after read operation.
                 this.storage.close(fd);
-                fd = -1; // Mark as closed
+                fd = -1;
 
-                if (content === null) { // Check for read error from driver
-                    console.warn(`Failed to read file content (new driver): ${driverPath}`);
+                if (content === null) {
+                    // console.warn(`Failed to read file content (new driver): ${driverPath}`);
                     return null;
                 }
 
                 console.log(`File read (new driver): ${driverPath}`);
-                try {
-                    // Attempt to parse if content looks like JSON, otherwise return as string
-                    // This is the same behavior as the old logic branch.
+                try { // Inner try specifically for JSON.parse
                     if (typeof content === 'string' && ((content.startsWith('{') && content.endsWith('}')) || (content.startsWith('[') && content.endsWith(']')))) {
                         return JSON.parse(content);
                     }
                     return content;
-                } catch (e) {
+                } catch (e_parse) { // Catch for JSON.parse
                     // If JSON.parse fails, return the original content string
+                    console.warn(`Failed to parse JSON for ${driverPath}, returning raw content. Error:`, e_parse);
                     return content;
-                } catch (innerError) { // <<<< THIS TRY NEEDS A CATCH
-                    console.error(`Inner error in readFile for ${driverPath} (new driver):`, innerError);
-                    if (fd !== -1) {
-                        try { this.storage.close(fd); } catch (closeError) {
-                            console.error(`Error closing fd during innerError handling for ${driverPath}:`, closeError);
-                        }
+                }
+            } catch (error) { // This is the CATCH for the main driver operations try block
+                console.error(`Error during readFile operation for ${driverPath} (new driver):`, error);
+                if (fd !== -1) { // Ensure fd is closed if an error occurred after open
+                    try { this.storage.close(fd); } catch (closeError) {
+                        console.error(`Error closing fd during error handling for ${driverPath}:`, closeError);
                     }
-                    throw innerError;
                 }
-            } catch (error) { // Outer catch
-                // ... existing outer catch logic ...
-                // Note: The original outer catch already handles closing fd if necessary
-                // and logs the error. We ensure the fd is closed by the inner catch if an error occurs there.
-                if (fd !== -1) { // This check might be redundant if inner catch always closes, but good for safety.
-                    try { this.storage.close(fd); } catch (e) { console.error("Error closing fd in outer catch (should have been closed by inner if error originated there):", e); }
-                }
-                console.error(`Error reading file ${driverPath} (new driver) - Outer catch:`, error);
-                throw error; // Re-throw original error
+                throw error; // Re-throw the original error from driver operations
             }
         } else {
-            // Old logic
+            // ... (old logic for other storage types, which should largely be deprecated/removed)
             const normalizedPath = this._normalizePath(filePath);
             const storageKey = this._getStorageKey(normalizedPath);
             try {
@@ -712,10 +613,15 @@ class FileSystem {
     }
 
     getStorageType() {
-        if (this.storage === indexedDBWrapper) return 'IndexedDB';
-        // Removed localStorageWrapper case
-        if (this.isNewLocalStorageDriver) return 'localStorage (New Driver)'; // Clarify if it's the new A: drive
-        return 'custom/unknown'; // More generic fallback
+        // if (this.storage === indexedDBWrapper) return 'IndexedDB'; // Old check
+        if (this.isNewLocalStorageDriver) return 'localStorage (New Driver)';
+        if (this.storage && typeof this.storage.getStorageType === 'function') { // Ideal: driver has this method
+            return this.storage.getStorageType();
+        }
+        if (this.storage && typeof this.storage.openDB === 'function') { // Heuristic for our IDB drivers
+            return 'IndexedDB';
+        }
+        return 'custom/unknown';
     }
 }
 
@@ -724,7 +630,7 @@ class FileSystem {
 const Drives = {
     // Initialize Drive A: Must use window.os.drives.get('A:')
     A: new FileSystem('A:', window.os && window.os.drives && window.os.drives.get('A:')),
-    B: window.indexedDB ? new FileSystem('B:', indexedDBWrapper) : null, // Drive B uses IndexedDB, if available
+    B: null, // Drive B will be initialized by indexdb-driver.js registering itself
 };
 
 // Check for Drive A initialization
@@ -755,7 +661,13 @@ Drives.getDrive = function(letter) {
             return null;
         }
         this[drive] = new FileSystem(drive + ':', storageAdapter);
-        console.log(`Drive ${drive}: added with ${storageAdapter === indexedDBWrapper ? 'IndexedDB' : 'custom adapter'}.`); // Removed localStorageWrapper check
+        let adapterType = 'custom adapter';
+        if (storageAdapter && typeof storageAdapter.getStorageType === 'function') {
+            adapterType = storageAdapter.getStorageType();
+        } else if (storageAdapter && typeof storageAdapter.openDB === 'function') { // Heuristic for IDB
+            adapterType = 'IndexedDB';
+        }
+        console.log(`Drive ${drive}: added with ${adapterType}.`);
         return this[drive];
     }
 };
@@ -866,12 +778,9 @@ window.WebOSFileSystem = {
     },
     // Utility to switch persistentStorageWrapper's driver
     switchToIndexedDBForPersistentStorage: function() {
-        if (window.indexedDB) {
-            persistentStorageWrapper.setDriver(indexedDBWrapper);
-            console.log("Switched persistentStorageWrapper to use IndexedDB.");
-        } else {
-            console.warn("IndexedDB is not available. persistentStorageWrapper remains on localStorage.");
-        }
+        console.warn("switchToIndexedDBForPersistentStorage: This method is deprecated. The IndexedDB driver should be set using persistentStorageWrapper.setDriver(driverInstance) by the responsible module (e.g., kernal or indexdb-driver itself).");
+        // Example: if (Drives.B && Drives.B.storage) persistentStorageWrapper.setDriver(Drives.B.storage);
+        // This is just an example, actual setting should be managed by kernal.
     },
     switchToLocalStorageForPersistentStorage: function() {
         // persistentStorageWrapper.setDriver(localStorageWrapper); // localStorageWrapper is removed
@@ -996,9 +905,5 @@ window.WebOSFileSystem = {
 
 })();
 
-// Ensure Drives.B is initialized if IndexedDB is available but wasn't auto-initialized at Drives object creation
-// This is more of a fallback if the initial check for window.indexedDB was premature (e.g. in a non-browser env then moved to browser)
-if (!Drives.B && window.indexedDB) {
-    console.log("Late initialization of Drive B (IndexedDB)");
-    Drives.addDrive('B', indexedDBWrapper);
-}
+// The late initialization block for Drive B using the internal indexedDBWrapper has been removed.
+// indexdb-driver.js will be responsible for registering Drive B.

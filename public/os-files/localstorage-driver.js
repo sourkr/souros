@@ -3,7 +3,7 @@
 let drive
 
 const fds = new Map()
-const fdIndex = 0
+let fdIndex = 0
 const closedFds = []
 
 load()

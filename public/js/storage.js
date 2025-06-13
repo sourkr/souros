@@ -422,13 +422,13 @@ if (Drives.A && !Drives.A.storage) {
 }
 
 Drives.getDrive = function(letter) {
-        const drive = letter.toUpperCase();
-        if (this[drive]) {
-            return this[drive];
-        }
-        console.warn(`Drive ${drive} not found or not initialized.`);
-        return null;
-    },
+    const drive = letter.toUpperCase();
+    if (this[drive]) {
+        return this[drive];
+    }
+    console.warn(`Drive ${drive} not found or not initialized.`);
+    return null;
+}; // Semicolon here, removed comma from after
 
 Drives.addDrive = function(letter, storageAdapter) {
     const drive = letter.toUpperCase();

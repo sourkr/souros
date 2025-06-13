@@ -1,33 +1,3 @@
-// Enhanced localStorage Wrapper
-const localStorageWrapper = {
-    getItem: function(key) {
-        return localStorage.getItem(key);
-    },
-    setItem: function(key, value) {
-        localStorage.setItem(key, value);
-    },
-    removeItem: function(key) {
-        localStorage.removeItem(key);
-    },
-    clear: function() {
-        localStorage.clear();
-    },
-    key: function(index) {
-        return localStorage.key(index);
-    },
-    length: function() {
-        return localStorage.length;
-    },
-    getAllItems: function() {
-        let items = {};
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            items[key] = localStorage.getItem(key);
-        }
-        return items;
-    }
-};
-
 // IndexedDB Wrapper
 const indexedDBWrapper = {
     dbName: 'WebOS_FS_IndexedDB',
@@ -119,15 +89,22 @@ const indexedDBWrapper = {
 
 // Persistent Storage Wrapper (using localStorage by default, can be configured)
 const persistentStorageWrapper = {
-    driver: localStorageWrapper, // Default to localStorage
+    driver: window.indexedDB ? indexedDBWrapper : null, // Default to IndexedDB if available, else null
 
     setDriver: function(driverInstance) {
         this.driver = driverInstance;
-        console.log(`Persistent storage driver set to: ${driverInstance === localStorageWrapper ? 'localStorage' : 'IndexedDB'}`);
+        if (driverInstance === indexedDBWrapper) {
+            console.log("Persistent storage driver set to: IndexedDB");
+        } else if (driverInstance === null) {
+            console.log("Persistent storage driver set to: null");
+        } else {
+            console.log("Persistent storage driver set to: custom (unknown type)");
+        }
     },
 
     isUsingLocalStorage: function() {
-        return this.driver === localStorageWrapper;
+        // localStorageWrapper will be removed, so this method might become obsolete or always false
+        return false;
     },
 
     isUsingIndexedDB: function() {
@@ -135,25 +112,27 @@ const persistentStorageWrapper = {
     },
 
     getItem: function(key) {
+        if (!this.driver) { console.error('No persistent storage driver set for getItem.'); return null; }
         return this.driver.getItem(key);
     },
 
     setItem: function(key, value) {
+        if (!this.driver) { console.error('No persistent storage driver set for setItem.'); return; }
         return this.driver.setItem(key, value);
     },
 
     removeItem: function(key) {
+        if (!this.driver) { console.error('No persistent storage driver set for removeItem.'); return; }
         return this.driver.removeItem(key);
     },
 
     clear: function() {
+        if (!this.driver) { console.error('No persistent storage driver set for clear.'); return; }
         return this.driver.clear();
     },
 
-    // Note: key() and length() are synchronous for localStorage but would need to be async for IndexedDB.
-    // For simplicity, these might need adjustment or careful handling if directly exposing them.
-    // For now, they reflect localStorage's behavior.
     key: function(index) {
+        if (!this.driver) { console.warn('No persistent storage driver set for key.'); return null; }
         if (typeof this.driver.key === 'function') {
             return this.driver.key(index);
         }
@@ -162,6 +141,7 @@ const persistentStorageWrapper = {
     },
 
     length: function() {
+        if (!this.driver) { console.warn('No persistent storage driver set for length.'); return 0; }
         if (typeof this.driver.length === 'function') {
             return this.driver.length();
         }
@@ -170,6 +150,7 @@ const persistentStorageWrapper = {
     },
 
     getAllItems: function() {
+        if (!this.driver) { console.warn('No persistent storage driver set for getAllItems.'); return {}; }
         if (typeof this.driver.getAllItems === 'function') {
             return this.driver.getAllItems();
         }
@@ -177,6 +158,11 @@ const persistentStorageWrapper = {
         return {};
     }
 };
+
+// Initial check for persistentStorageWrapper driver
+if (!persistentStorageWrapper.driver) {
+    console.warn("PersistentStorageWrapper initialized without a default driver. Explicitly set a driver using setDriver().");
+}
 
 
 // --- Unified FileSystem API ---
@@ -231,25 +217,19 @@ class FileSystem {
 
 
     _getStorageKey(normalizedPath) {
-        // This method is primarily for the old localStorageWrapper logic
-        if (this.storage === localStorageWrapper) { // This condition now implies OLD localStorageWrapper
-            if (normalizedPath === this.basePath) { // e.g. "A:/"
-                return ""; // Root directory listing key for localStorage
-            }
-            // Strips "A:/" prefix to get "foo/bar.txt" or "foo/"
-            return normalizedPath.substring(this.basePath.length);
-        }
-        return normalizedPath; // For other adapters, path is the key
+        // This method is now simplified as localStorageWrapper specific logic is removed.
+        return normalizedPath;
     }
 
     async _initializeDrive() {
-        // This method is for the old localStorageWrapper and potentially other future non-new-driver types
+        // This method is for potentially other future non-new-driver types
         if (this.isNewLocalStorageDriver) return; // New driver handles its own initialization
 
         const storageKey = this._getStorageKey(this.basePath);
         const rootDir = await this.storage.getItem(storageKey);
         if (!rootDir) {
-            console.log(`Drive ${this.driveLetter} initialized with ${this.storage === localStorageWrapper ? 'OLD localStorageWrapper' : 'IndexedDB/Custom'}.`);
+            // Simplified logging
+            console.log(`Drive ${this.driveLetter} initialized with ${this.storage === indexedDBWrapper ? 'IndexedDB' : 'a custom adapter'}.`);
         }
     }
 
@@ -265,9 +245,10 @@ class FileSystem {
         }
         // Remove trailing slashes unless it's the root itself
         // For localStorage, keys for directories should end with '/', except for the root "" key.
-        if (this.storage === localStorageWrapper && path === this.basePath) {
-             // Root of Drive A, _getStorageKey handles this to ""
-        } else if (path !== this.basePath && path.endsWith('/')) {
+        // if (this.storage === localStorageWrapper && path === this.basePath) { // Condition removed
+        //      // Root of Drive A, _getStorageKey handles this to ""
+        // } else
+        if (path !== this.basePath && path.endsWith('/')) { // Adjusted condition (no more localStorageWrapper check here)
            // For files or non-root directories, _normalizePath might remove trailing slash.
            // Let's ensure createDirectory adds it back before calling _getStorageKey if needed.
            // For files, it should be removed.
@@ -308,12 +289,14 @@ class FileSystem {
         // This is problematic for directory keys if we expect them to end with '/'.
         // Let's refine _normalizePath slightly for directories.
 
-        if (path !== this.basePath && path.endsWith('/') && this.storage !== localStorageWrapper) { // Keep trailing slash for non-LS directory paths
-            // For LS, we handle slash in _getStorageKey or rely on createDirectory adding it.
-            // Actually, _getStorageKey should get the pure path.
-            // The calling function (e.g. createDirectory) should ensure dirPath ends with / if that's the convention.
-        } else if (path !== this.basePath && path.endsWith('/')) {
-             path = path.slice(0, -1); // Original behavior
+        // if (path !== this.basePath && path.endsWith('/') && this.storage !== localStorageWrapper) { // Condition removed
+        // Keep trailing slash for non-LS directory paths
+        // For LS, we handle slash in _getStorageKey or rely on createDirectory adding it.
+        // Actually, _getStorageKey should get the pure path.
+        // The calling function (e.g. createDirectory) should ensure dirPath ends with / if that's the convention.
+        // } else
+        if (path !== this.basePath && path.endsWith('/')) { // Adjusted, was else if
+             path = path.slice(0, -1); // Original behavior for trailing slash removal on non-base paths
         }
         return path.replace(/\/\//g, '/'); // Replace double slashes
     }
@@ -397,11 +380,11 @@ class FileSystem {
     async readFile(filePath) {
         if (this.isNewLocalStorageDriver) {
             const driverPath = this._getDriverPath(filePath);
-            let fd = -1;
-            try {
-            let fd = -1;
-            try {
-                fd = this.storage.open(driverPath, 'r'); // read-only
+            let fd = -1; // Outer fd, correctly declared
+            try { // Outer try
+                // let fd = -1; // This is the duplicated declaration to be removed
+                try { // Inner try
+                    fd = this.storage.open(driverPath, 'r'); // read-only
                 if (fd === -1) {
                     // console.warn(`File not found or could not be opened for reading (new driver): ${driverPath}`);
                     // Standard behavior is often to throw an error or return null.
@@ -450,12 +433,23 @@ class FileSystem {
                 } catch (e) {
                     // If JSON.parse fails, return the original content string
                     return content;
+                } catch (innerError) { // <<<< THIS TRY NEEDS A CATCH
+                    console.error(`Inner error in readFile for ${driverPath} (new driver):`, innerError);
+                    if (fd !== -1) {
+                        try { this.storage.close(fd); } catch (closeError) {
+                            console.error(`Error closing fd during innerError handling for ${driverPath}:`, closeError);
+                        }
+                    }
+                    throw innerError;
                 }
-            } catch (error) {
-                if (fd !== -1) {
-                    try { this.storage.close(fd); } catch (e) { console.error("Error closing fd during error handling:", e); }
+            } catch (error) { // Outer catch
+                // ... existing outer catch logic ...
+                // Note: The original outer catch already handles closing fd if necessary
+                // and logs the error. We ensure the fd is closed by the inner catch if an error occurs there.
+                if (fd !== -1) { // This check might be redundant if inner catch always closes, but good for safety.
+                    try { this.storage.close(fd); } catch (e) { console.error("Error closing fd in outer catch (should have been closed by inner if error originated there):", e); }
                 }
-                console.error(`Error reading file ${driverPath} (new driver):`, error);
+                console.error(`Error reading file ${driverPath} (new driver) - Outer catch:`, error);
                 throw error; // Re-throw original error
             }
         } else {
@@ -484,31 +478,33 @@ class FileSystem {
     async deleteFile(filePath) { // filePath can be for a file or a directory
         if (this.isNewLocalStorageDriver) {
             const driverPath = this._getDriverPath(filePath);
-            // The localstorage-driver.js does not currently implement unlink or rmdir.
-            // Therefore, deletion is a no-op for this driver.
-            console.warn(`deleteFile operation is not supported for Drive A (new driver) due to missing 'unlink/rmdir' in driver: ${driverPath}. No action taken.`);
-            // To prevent errors if called, simply return or do nothing.
-            // If this needs to throw an error, change the behavior here.
-            return; // Or perhaps: throw new Error("Delete operation not supported by this driver.");
-        } else {
-            // Old logic
-            const normalizedPath = this._normalizePath(filePath);
-            const storageKey = this._getStorageKey(normalizedPath);
             try {
-                let keyToDelete = storageKey;
-                if (this.storage === localStorageWrapper && filePath.endsWith('/')) {
-                    if (normalizedPath !== this.basePath && !keyToDelete.endsWith('/')) {
-                        keyToDelete += '/';
-                    }
+                // Assuming this.storage.delete(path) returns 0 for success, -1 for error.
+                const result = this.storage.delete(driverPath);
+                if (result === -1) {
+                    // The driver's delete method should log specific errors.
+                    // We can throw a generic error here or rely on driver logs.
+                    console.error(`Failed to delete file/directory (new driver): ${driverPath}. Driver indicated failure.`);
+                    throw new Error(`Deletion failed for ${driverPath}.`);
                 }
-                await this.storage.removeItem(keyToDelete);
-                console.log(`File/Dir deleted: ${normalizedPath} (key: ${keyToDelete})`);
-                this._removeDirectoryEntry(normalizedPath);
+                console.log(`File/directory deleted (new driver): ${driverPath}`);
+                // Note: The new driver's delete method is responsible for updating parent dir listings.
+                // No need for _removeDirectoryEntry here for the new driver.
             } catch (error) {
-                console.error(`Error deleting file ${normalizedPath}:`, error);
-                throw error;
+                console.error(`Error during deleteFile operation for ${driverPath} (new driver):`, error);
+                throw error; // Re-throw to allow higher-level error handling
             }
+        } else {
+            // This 'else' block should have been removed in a previous step
+            // (Refactor storage.js to Remove localStorageWrapper).
+            // If it's still here, it indicates an issue with previous step execution.
+            // For now, assume it's gone or will be ignored.
+            // If it's needed for other potential drivers, this instruction would be different.
+            // Given the plan, it's expected to be gone.
+            console.warn(`deleteFile called on a non-new-localStorage-driver for path: ${filePath}. This path is currently unhandled after localStorageWrapper removal.`);
+            throw new Error("deleteFile is not supported for this drive type after refactoring.");
         }
+        // Or throw new Error(`deleteFile not supported for this drive type.`);
     }
 
     async createFile(filePath, content = '') { // Similar to writeFile
@@ -536,82 +532,27 @@ class FileSystem {
                 console.error(`Error creating directory ${driverPath} (new driver):`, error.message); // Log only message to avoid redundancy if error is re-thrown
                 throw error; // Re-throw the error for the caller to handle
             }
-        } else {
-            // Old logic
-            let normalizedPath = this._normalizePath(dirPath);
-            let dirPathForStorage = normalizedPath;
-            if (!dirPathForStorage.endsWith('/')) {
-                dirPathForStorage += '/';
-            }
-            const storageKey = this._getStorageKey(dirPathForStorage);
-            try {
-                const existing = await this.storage.getItem(storageKey);
-                if (existing !== null) {
-                    console.log(`Directory already exists or path conflict: ${normalizedPath} (key: ${storageKey})`);
-                    return;
-                }
-                await this.storage.setItem(storageKey, JSON.stringify({type: "directory", created: Date.now()}));
-                console.log(`Directory created: ${normalizedPath} (key: ${storageKey})`);
-                this._updateDirectoryListing(dirPathForStorage, 'directory');
-            } catch (error) {
-                console.error(`Error creating directory ${normalizedPath}:`, error);
-                throw error;
-            }
         }
+        // else block for old logic removed
+        console.warn(`createDirectory called for ${dirPath} on a drive type that is not the new 'A:' driver. This is currently not supported.`);
+        // Or throw new Error(`createDirectory not supported for this drive type.`);
     }
 
     // _updateDirectoryListing, _removeDirectoryEntry, _getParentPath are primarily for the old system.
     // The new driver manages its own directory structure internally.
     async _updateDirectoryListing(itemPath, itemType) {
-        if (this.isNewLocalStorageDriver) return; // New driver handles this internally
-        // ... existing code ...
-        const parentPath = this._getParentPath(itemPath);
-        if (!parentPath) return;
-        const storageParentPath = this._getStorageKey(parentPath);
-        let parentDirContent = await this.storage.getItem(storageParentPath);
-        let dirListing;
-        try {
-            dirListing = parentDirContent ? JSON.parse(parentDirContent) : { type: "directory", entries: {}, created: Date.now() };
-            if(dirListing.type !== "directory") {
-                console.warn(`Path ${parentPath} (key: ${storageParentPath}) was a file, converting to directory to add entries.`);
-                dirListing = { type: "directory", entries: {}, created: Date.now() };
-            }
-        } catch(e) {
-             dirListing = { type: "directory", entries: {}, created: Date.now() };
-        }
-        if(!dirListing.entries) dirListing.entries = {};
-        let itemName = itemPath.substring(parentPath.length).replace(/^\//, '');
-        if(itemPath.endsWith('/')) itemName = itemName.slice(0,-1);
-        dirListing.entries[itemName] = { type: itemType };
-        await this.storage.setItem(storageParentPath, JSON.stringify(dirListing));
-        console.log(`Updated dir listing for ${parentPath} (key: ${storageParentPath}) - added ${itemName}`);
+        console.warn('_updateDirectoryListing is deprecated and should not be used with new drivers.');
+        return;
     }
 
     async _removeDirectoryEntry(itemPath) {
-        if (this.isNewLocalStorageDriver) return; // New driver handles this internally
-        // ... existing code ...
-        const parentPath = this._getParentPath(itemPath);
-        if (!parentPath) return;
-        const storageParentPath = this._getStorageKey(parentPath);
-        let parentDirContent = await this.storage.getItem(storageParentPath);
-        if (!parentDirContent) return;
-        let dirListing;
-        try {
-            dirListing = JSON.parse(parentDirContent);
-            if(dirListing.type !== "directory" || !dirListing.entries) return;
-        } catch(e) {
-            return;
-        }
-        let itemName = itemPath.substring(parentPath.length).replace(/^\//, '');
-        if(itemPath.endsWith('/')) itemName = itemName.slice(0,-1);
-        if (dirListing.entries[itemName]) {
-            delete dirListing.entries[itemName];
-            await this.storage.setItem(storageParentPath, JSON.stringify(dirListing));
-            console.log(`Updated dir listing for ${parentPath} (key: ${storageParentPath}) - removed ${itemName}`);
-        }
+        console.warn('_removeDirectoryEntry is deprecated and should not be used with new drivers.');
+        return;
     }
 
-    _getParentPath(filePath) { // Used by old system, might be useful generally
+    _getParentPath(filePath) { // Was used by old system, might be useful generally if adapted
+        // For now, keeping its old logic but noting it might need review if used by non-new-driver systems.
+        // If this.isNewLocalStorageDriver is true for all relevant FileSystem instances, this method might become unused.
         const normalizedPath = this._normalizePath(filePath); // Uses old normalization
         if (normalizedPath === this.basePath || normalizedPath === this.basePath.slice(0,-1)) {
             return null;
@@ -709,63 +650,10 @@ class FileSystem {
                 // So this catch is for other unexpected errors.
                 throw error;
             }
-        } else {
-            // Old logic
-            const normalizedDirPath = this._normalizePath(dirPath + '/');
-            console.log(`Listing directory: ${normalizedDirPath}`);
-            const storageDirPathKey = this._getStorageKey(normalizedDirPath);
-            const dirObjectString = await this.storage.getItem(storageDirPathKey);
-
-            if (dirObjectString) {
-                try {
-                    const dirObject = JSON.parse(dirObjectString);
-                    if (dirObject && dirObject.type === "directory" && dirObject.entries) {
-                        return Object.keys(dirObject.entries).map(name => ({
-                            name,
-                            type: dirObject.entries[name].type
-                        }));
-                    }
-                } catch (e) {
-                    console.warn(`Could not parse directory object for ${normalizedDirPath} (key: ${storageDirPathKey}), falling back to prefix scan if applicable. Error:`, e);
-                }
-            }
-            if (this.storage === localStorageWrapper) {
-                const allItems = await this.storage.getAllItems();
-                if (!allItems) return [];
-                const entries = new Set();
-                for (const key in allItems) {
-                    if (storageDirPathKey === "") {
-                        if (!key.includes('/')) {
-                            if (key.endsWith('/')) entries.add(JSON.stringify({ name: key.slice(0,-1), type: 'directory' }));
-                            else entries.add(JSON.stringify({ name: key, type: 'file' }));
-                        } else {
-                            entries.add(JSON.stringify({ name: key.substring(0, key.indexOf('/')), type: 'directory' }));
-                        }
-                    } else {
-                        if (key.startsWith(storageDirPathKey) && key !== storageDirPathKey) {
-                            const relativePath = key.substring(storageDirPathKey.length);
-                            const firstSlashIndex = relativePath.indexOf('/');
-                            let entryName = relativePath;
-                            let type = 'file';
-                            if (firstSlashIndex !== -1) {
-                                entryName = relativePath.substring(0, firstSlashIndex);
-                                type = 'directory';
-                            } else if (relativePath.endsWith('/')) {
-                                 type = 'directory';
-                                 entryName = relativePath.slice(0,-1);
-                            }
-                            if(entryName) entries.add(JSON.stringify({ name: entryName, type }));
-                        }
-                    }
-                }
-                const parsedEntries = Array.from(entries).map(item => JSON.parse(item));
-                console.log(`Directory listing for ${normalizedDirPath} (localStorage prefix scan, key: ${storageDirPathKey}):`, parsedEntries);
-                return parsedEntries;
-            } else {
-                console.log(`No directory object found for ${normalizedDirPath} and prefix scan not implemented for this adapter type.`);
-                return [];
-            }
         }
+        // else block for old logic removed
+        console.warn(`listDirectory called for ${dirPath} on a drive type that is not the new 'A:' driver. This is currently not supported and will return an empty array.`);
+        return []; // Or throw new Error(...)
     }
 
      async exists(path) {
@@ -795,26 +683,10 @@ class FileSystem {
                 console.warn(`Exists check failed for ${driverPath} (new driver):`, error.message);
                 return false;
             }
-        } else {
-            // Old logic
-            const normalizedPath = this._normalizePath(path);
-            const storageKey = this._getStorageKey(normalizedPath);
-            let item = await this.storage.getItem(storageKey);
-            if (item !== null) return true;
-            if (this.storage === localStorageWrapper && !storageKey.endsWith('/') && normalizedPath !== this.basePath) {
-                const dirStorageKey = storageKey + '/';
-                item = await this.storage.getItem(dirStorageKey);
-                if (item !== null) return true;
-            } else if (this.storage !== localStorageWrapper) {
-                const directoryMarkerPath = normalizedPath.endsWith('/') ? normalizedPath : normalizedPath + '/';
-                if (normalizedPath !== directoryMarkerPath) {
-                     const dirStorageKey = this._getStorageKey(directoryMarkerPath);
-                     item = await this.storage.getItem(dirStorageKey);
-                     if (item !== null) return true;
-                }
-            }
-            return false;
         }
+        // else block for old logic removed
+        console.warn(`exists check for ${path} on a drive type that is not the new 'A:' driver. This is currently not supported and will return false.`);
+        return false; // Or throw new Error(...)
     }
 
     async rename(oldPath, newPath) {
@@ -829,52 +701,10 @@ class FileSystem {
             // If this needs to throw an error, change the behavior here.
             // Throwing an error might be more appropriate for a failed operation.
             throw new Error(`Rename operation not supported by this driver for paths: ${oldDriverPath} to ${newDriverPath}`);
-        } else {
-            // Old logic
-            const normalizedOldPath = this._normalizePath(oldPath);
-            const normalizedNewPath = this._normalizePath(newPath);
-
-            if (normalizedOldPath === normalizedNewPath) return;
-
-            let isDirectory = oldPath.endsWith('/');
-            let content = await this.readFile(normalizedOldPath);
-
-            if (!isDirectory && content && typeof content === 'object' && content.type === 'directory') {
-                isDirectory = true;
-            }
-            if (content === null && !isDirectory) {
-                if(await this.exists(oldPath + '/')) isDirectory = true;
-            }
-
-            if (isDirectory) {
-                let oldDirPathFull = oldPath;
-                if(!oldDirPathFull.endsWith('/')) oldDirPathFull += '/';
-                let newDirPathFull = newPath;
-                if(!newDirPathFull.endsWith('/')) newDirPathFull += '/';
-
-                const storageOldDirPath = this._getStorageKey(oldDirPathFull);
-                await this.createDirectory(newDirPathFull);
-                const entries = await this.listDirectory(oldDirPathFull);
-                for (const entry of entries) {
-                    const oldEntryFullPath = oldDirPathFull + entry.name + (entry.type === 'directory' ? '/' : '');
-                    const newEntryFullPath = newDirPathFull + entry.name + (entry.type === 'directory' ? '/' : '');
-                    await this.rename(oldEntryFullPath, newEntryFullPath);
-                }
-                await this.storage.removeItem(storageOldDirPath);
-                this._removeDirectoryEntry(oldDirPathFull);
-                this._updateDirectoryListing(newDirPathFull, 'directory');
-            } else {
-                if (content === null) throw new Error(`Source file does not exist: ${oldPath}`);
-                const storageOldFilePath = this._getStorageKey(normalizedOldPath);
-                const storageNewFilePath = this._getStorageKey(normalizedNewPath);
-                const contentToWrite = typeof content === 'string' ? content : JSON.stringify(content);
-                await this.storage.setItem(storageNewFilePath, contentToWrite);
-                await this.storage.removeItem(storageOldFilePath);
-                this._removeDirectoryEntry(normalizedOldPath);
-                this._updateDirectoryListing(normalizedNewPath, 'file');
-            }
-            console.log(`Renamed ${oldPath} to ${newPath}`);
         }
+        // else block for old logic removed
+        console.warn(`rename called for ${oldPath} to ${newPath} on a drive type that is not the new 'A:' driver. This is currently not supported.`);
+        throw new Error(`Rename not supported for this drive type.`);
     }
 
     getDriveLetter() {
@@ -882,21 +712,30 @@ class FileSystem {
     }
 
     getStorageType() {
-        if (this.storage === localStorageWrapper) return 'localStorage';
         if (this.storage === indexedDBWrapper) return 'IndexedDB';
-        return 'unknown';
+        // Removed localStorageWrapper case
+        if (this.isNewLocalStorageDriver) return 'localStorage (New Driver)'; // Clarify if it's the new A: drive
+        return 'custom/unknown'; // More generic fallback
     }
 }
 
 
 // --- Drive Management ---
 const Drives = {
-    // Initialize Drive A: Attempt to use the new os.drives.get('A:') if available,
-    // otherwise fall back to the old localStorageWrapper.
-    A: new FileSystem('A:', (window.os && window.os.drives && window.os.drives.get('A:')) ? window.os.drives.get('A:') : localStorageWrapper),
+    // Initialize Drive A: Must use window.os.drives.get('A:')
+    A: new FileSystem('A:', window.os && window.os.drives && window.os.drives.get('A:')),
     B: window.indexedDB ? new FileSystem('B:', indexedDBWrapper) : null, // Drive B uses IndexedDB, if available
+};
 
-    getDrive: function(letter) {
+// Check for Drive A initialization
+if (Drives.A && !Drives.A.storage) {
+    console.error("FATAL: Drive A could not be initialized because no storage driver was provided (window.os.drives.get('A:') was not available). Drive A will be unusable.");
+    Drives.A = null; // Or throw new Error("Drive A initialization failed.");
+}
+
+// Continue with the rest of the Drives object definition if necessary, or just ensure it's correctly structured.
+// The original code just had getDrive and addDrive after A and B.
+Drives.getDrive = function(letter) {
         const drive = letter.toUpperCase();
         if (this[drive]) {
             return this[drive];
@@ -916,7 +755,7 @@ const Drives = {
             return null;
         }
         this[drive] = new FileSystem(drive + ':', storageAdapter);
-        console.log(`Drive ${drive}: added with ${storageAdapter === localStorageWrapper ? 'localStorage' : storageAdapter === indexedDBWrapper ? 'IndexedDB' : 'custom adapter'}.`);
+        console.log(`Drive ${drive}: added with ${storageAdapter === indexedDBWrapper ? 'IndexedDB' : 'custom adapter'}.`); // Removed localStorageWrapper check
         return this[drive];
     }
 };
@@ -1035,8 +874,11 @@ window.WebOSFileSystem = {
         }
     },
     switchToLocalStorageForPersistentStorage: function() {
-        persistentStorageWrapper.setDriver(localStorageWrapper);
-        console.log("Switched persistentStorageWrapper to use localStorage.");
+        // persistentStorageWrapper.setDriver(localStorageWrapper); // localStorageWrapper is removed
+        console.warn("switchToLocalStorageForPersistentStorage is deprecated and no longer functional as localStorageWrapper has been removed.");
+        // Optionally, if there's another "simple" key-value store it could switch to:
+        // persistentStorageWrapper.setDriver(someOtherSimpleDriver);
+        // console.log("Switched persistentStorageWrapper to use someOtherSimpleDriver.");
     }
 };
 

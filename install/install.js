@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 2. Write os_config.json
             const defaultConfig = {
-                version: '1.0.0',
+                version: '0.0.1 beta',
                 installedAt: new Date().toISOString(),
                 defaultUser: 'guest',
                 settings: {

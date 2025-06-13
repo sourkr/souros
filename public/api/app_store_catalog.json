@@ -34,5 +34,15 @@
     "icon": "assets/icons/file-pen.svg",
     "permissions": ["indexedDB"],
     "developer": "WebOS Team"
+  },
+  {
+    "id": "exampleApp",
+    "name": "Example App",
+    "version": "1.0.0",
+    "description": "A demonstration of how to add new apps.",
+    "icon": "assets/icons/puzzle-piece.svg",
+    "developer": "OS Developer",
+    "permissions": [],
+    "appUrl": "apps/example_app/index.html"
   }
 ]

@@ -44,5 +44,38 @@
     "developer": "OS Developer",
     "permissions": [],
     "appUrl": "apps/example_app/index.html"
+  },
+  {
+    "id": "fileExplorer",
+    "name": "File Explorer",
+    "version": "1.0.0",
+    "description": "Core system application for browsing files and drives.",
+    "icon": "assets/icons/folder-open.svg",
+    "developer": "Sour OS Team",
+    "permissions": ["localStorage", "indexedDB", "persistentStorage"],
+    "appUrl": null,
+    "isSystemApp": true
+  },
+  {
+    "id": "appStore",
+    "name": "App Store",
+    "version": "1.0.0",
+    "description": "Core system application for discovering and managing apps.",
+    "icon": "assets/icons/store.svg",
+    "developer": "Sour OS Team",
+    "permissions": ["network"],
+    "appUrl": null,
+    "isSystemApp": true
+  },
+  {
+    "id": "terminal",
+    "name": "Terminal",
+    "version": "1.0.0",
+    "description": "Core system application providing command-line access.",
+    "icon": "assets/icons/puzzle-piece.svg",
+    "developer": "Sour OS Team",
+    "permissions": ["localStorage", "indexedDB"],
+    "appUrl": null,
+    "isSystemApp": true
   }
 ]

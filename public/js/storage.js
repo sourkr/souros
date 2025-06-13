@@ -285,10 +285,22 @@ class FileSystem {
         this._initializeDrive();
     }
 
+    _getStorageKey(normalizedPath) {
+        if (this.storage === localStorageWrapper) {
+            if (normalizedPath === this.basePath) { // e.g. "A:/"
+                return ""; // Root directory listing key for localStorage
+            }
+            // Strips "A:/" prefix to get "foo/bar.txt" or "foo/"
+            return normalizedPath.substring(this.basePath.length);
+        }
+        return normalizedPath; // For other adapters, path is the key
+    }
+
     async _initializeDrive() {
         // Check if the drive has a root directory structure. If not, create it.
         // This is more conceptual for flat key-value stores but good for path logic.
-        const rootDir = await this.storage.getItem(this.basePath);
+        const storageKey = this._getStorageKey(this.basePath);
+        const rootDir = await this.storage.getItem(storageKey);
         if (!rootDir) {
             // For localStorage/IndexedDB, we might store a marker or a serialized directory object.
             // For simplicity, we'll assume paths are keys and their content is the value.
@@ -308,14 +320,64 @@ class FileSystem {
             }
         }
         // Remove trailing slashes unless it's the root itself
-        if (path !== this.basePath && path.endsWith('/')) {
-            path = path.slice(0, -1);
+        // For localStorage, keys for directories should end with '/', except for the root "" key.
+        if (this.storage === localStorageWrapper && path === this.basePath) {
+             // Root of Drive A, _getStorageKey handles this to ""
+        } else if (path !== this.basePath && path.endsWith('/')) {
+           // For files or non-root directories, _normalizePath might remove trailing slash.
+           // Let's ensure createDirectory adds it back before calling _getStorageKey if needed.
+           // For files, it should be removed.
+           // The _getStorageKey method expects normalizedPath which has this logic.
+        }
+         // This normalization is tricky. Let's simplify: _normalizePath always ensures / for dirs except root.
+         // And _getStorageKey handles the final transformation.
+        // The existing _normalizePath seems mostly fine, but let's re-evaluate its interaction with _getStorageKey.
+        // _normalizePath: "A:/foo/" -> "A:/foo/" ; "A:/file.txt" -> "A:/file.txt" ; "A:/" -> "A:/"
+        // _getStorageKey will then convert these.
+        // If path is "A:/foo/" (directory), normalizedPath is "A:/foo". _getStorageKey needs to handle this.
+        // Let's adjust _normalizePath for directories to consistently end with /
+        // and for files to not end with /.
+        // However, the current _normalizePath is used by many places.
+        // Let's stick to the defined _normalizePath and make _getStorageKey robust.
+        // _normalizePath removes trailing slash for non-root.
+        // So "A:/foo/" becomes "A:/foo". We need to add it back for directory keys in localStorage.
+        // This is getting complex. Let's assume _normalizePath is as is.
+        // _getStorageKey needs to be smart.
+        // Let's reconsider: _normalizePath for a directory path "A:/foo/" results in "A:/foo".
+        // This is what we want for `createDirectory` to then append a slash to before calling `_getStorageKey`.
+        // For writeFile, "A:/foo/file.txt" is fine.
+        // For readFile for a directory "A:/foo/", it will be "A:/foo".
+        // This might be okay if directory data is stored under the key "foo" not "foo/".
+        // The current code stores directory JSON under "A:/foo/" (full path).
+        // This needs to be consistent.
+
+        // Simpler: _normalizePath for "A:/foo/" -> "A:/foo".
+        // If we intend it as a directory key, we add "/" back before _getStorageKey.
+        // This is what createDirectory does.
+        // For writeFile, it will be "A:/foo/file.txt".
+        // For readFile, for "A:/foo/file.txt", it's "A:/foo/file.txt". For dir "A:/foo/", it's "A:/foo".
+
+        // The current _normalizePath:
+        // - "A:/foo/" -> "A:/foo" (if not this.basePath)
+        // - "A:/" -> "A:/"
+        // - "A:/file.txt" -> "A:/file.txt"
+        // This is problematic for directory keys if we expect them to end with '/'.
+        // Let's refine _normalizePath slightly for directories.
+
+        if (path !== this.basePath && path.endsWith('/') && this.storage !== localStorageWrapper) { // Keep trailing slash for non-LS directory paths
+            // For LS, we handle slash in _getStorageKey or rely on createDirectory adding it.
+            // Actually, _getStorageKey should get the pure path.
+            // The calling function (e.g. createDirectory) should ensure dirPath ends with / if that's the convention.
+        } else if (path !== this.basePath && path.endsWith('/')) {
+             path = path.slice(0, -1); // Original behavior
         }
         return path.replace(/\/\//g, '/'); // Replace double slashes
     }
 
     async writeFile(filePath, content) {
-        const normalizedPath = this._normalizePath(filePath);
+        const normalizedPath = this._normalizePath(filePath); // e.g. A:/foo/bar.txt
+        const storageKey = this._getStorageKey(normalizedPath); // e.g. foo/bar.txt
+
         if (typeof content !== 'string') {
             try {
                 content = JSON.stringify(content);
@@ -325,8 +387,8 @@ class FileSystem {
             }
         }
         try {
-            await this.storage.setItem(normalizedPath, content);
-            console.log(`File written: ${normalizedPath}`);
+            await this.storage.setItem(storageKey, content);
+            console.log(`File written: ${normalizedPath} (key: ${storageKey})`);
 
             // Update parent directory listing if we implement directory tracking
             // For now, this is a simplified model.
@@ -339,11 +401,12 @@ class FileSystem {
     }
 
     async readFile(filePath) {
-        const normalizedPath = this._normalizePath(filePath);
+        const normalizedPath = this._normalizePath(filePath); // e.g. A:/foo/bar.txt or A:/foo (for dir)
+        const storageKey = this._getStorageKey(normalizedPath); // e.g. foo/bar.txt or foo
         try {
-            const content = await this.storage.getItem(normalizedPath);
+            const content = await this.storage.getItem(storageKey);
             if (content === null) {
-                console.warn(`File not found: ${normalizedPath}`);
+                console.warn(`File not found: ${normalizedPath} (key: ${storageKey})`);
                 return null; // Or throw new Error('File not found');
             }
             console.log(`File read: ${normalizedPath}`);
@@ -360,12 +423,35 @@ class FileSystem {
     }
 
     async deleteFile(filePath) {
-        const normalizedPath = this._normalizePath(filePath);
+        const normalizedPath = this._normalizePath(filePath); // e.g. A:/foo/bar.txt or A:/foo (for dir)
+        const storageKey = this._getStorageKey(normalizedPath); // e.g. foo/bar.txt or foo
         try {
-            await this.storage.removeItem(normalizedPath);
-            console.log(`File deleted: ${normalizedPath}`);
+            // If it's a directory for localStorage, the key might need a trailing slash.
+            // The createDirectory ensures keys for directories end with '/' (except root).
+            // deleteFile for a directory "A:/foo/" -> normalized "A:/foo" -> key "foo"
+            // We need to ensure we try deleting "foo/" if it was a directory.
+            // This implies _getStorageKey or the caller needs to handle this.
+            // Let's assume createDirectory stores "foo/" for "A:/foo/"
+            // So, if filePath is "A:/foo/", normalizedPath is "A:/foo".
+            // _getStorageKey("A:/foo") is "foo".
+            // We need to decide if deleteFile("A:/foo/") should delete key "foo" or "foo/"
+            // For now, let's assume it implies deleting the item itself.
+            // If it's a directory, its *contents* are not handled here, only the directory marker.
+            // The `rename` logic for directories handles recursive deletion of contents.
+            // This is simplified for now. A specific deleteDirectory would be better.
+
+            let keyToDelete = storageKey;
+            if (this.storage === localStorageWrapper && filePath.endsWith('/')) {
+                 // If original path indicated directory, ensure storage key for LS also implies directory
+                 if (normalizedPath !== this.basePath && !keyToDelete.endsWith('/')) {
+                    keyToDelete += '/';
+                 }
+            }
+
+            await this.storage.removeItem(keyToDelete);
+            console.log(`File/Dir deleted: ${normalizedPath} (key: ${keyToDelete})`);
             // Update parent directory listing
-             this._removeDirectoryEntry(normalizedPath);
+             this._removeDirectoryEntry(normalizedPath); // Uses full normalizedPath
         } catch (error) {
             console.error(`Error deleting file ${normalizedPath}:`, error);
             throw error;
@@ -379,41 +465,47 @@ class FileSystem {
     async createDirectory(dirPath) {
         let normalizedPath = this._normalizePath(dirPath);
         // Ensure directory paths end with a slash for consistency in this model
-        if (!normalizedPath.endsWith('/')) {
-            normalizedPath += '/';
+        let dirPathForStorage = normalizedPath;
+        if (!dirPathForStorage.endsWith('/')) {
+            dirPathForStorage += '/';
         }
+        // dirPathForStorage is now e.g. "A:/foo/" or "A:/"
+
+        const storageKey = this._getStorageKey(dirPathForStorage); // e.g. "foo/" or ""
 
         // In a key-value store, a directory can be an empty string or a special marker.
         // Or, its existence is implied by files within it.
         // We'll store a marker to signify it's a directory.
         try {
-            const existing = await this.storage.getItem(normalizedPath);
+            const existing = await this.storage.getItem(storageKey);
             if (existing !== null) {
                 // Potentially check if it's already a directory marker
                 // For now, if it exists, we assume it's fine or was intended.
-                console.log(`Directory already exists or path conflict: ${normalizedPath}`);
+                console.log(`Directory already exists or path conflict: ${normalizedPath} (key: ${storageKey})`);
                 return;
             }
-            await this.storage.setItem(normalizedPath, JSON.stringify({type: "directory", created: Date.now()}));
-            console.log(`Directory created: ${normalizedPath}`);
+            await this.storage.setItem(storageKey, JSON.stringify({type: "directory", created: Date.now()}));
+            console.log(`Directory created: ${normalizedPath} (key: ${storageKey})`);
 
-            this._updateDirectoryListing(normalizedPath, 'directory');
+            this._updateDirectoryListing(dirPathForStorage, 'directory'); // Use path that ends with /
         } catch (error) {
             console.error(`Error creating directory ${normalizedPath}:`, error);
             throw error;
         }
     }
 
-    async _updateDirectoryListing(itemPath, itemType) {
-        const parentPath = this._getParentPath(itemPath);
-        if (!parentPath) return; // Root has no parent to update in this context
+    async _updateDirectoryListing(itemPath, itemType) { // itemPath is full path e.g. A:/foo/bar.txt or A:/foo/
+        const parentPath = this._getParentPath(itemPath); // e.g. A:/foo/ or A:/
+        if (!parentPath) return;
 
-        let parentDirContent = await this.storage.getItem(parentPath);
+        const storageParentPath = this._getStorageKey(parentPath); // e.g. foo/ or ""
+
+        let parentDirContent = await this.storage.getItem(storageParentPath);
         let dirListing;
         try {
             dirListing = parentDirContent ? JSON.parse(parentDirContent) : { type: "directory", entries: {}, created: Date.now() };
-            if(dirListing.type !== "directory") { // If it was a file, convert to dir (or handle error)
-                console.warn(`Path ${parentPath} was a file, converting to directory to add entries.`);
+            if(dirListing.type !== "directory") {
+                console.warn(`Path ${parentPath} (key: ${storageParentPath}) was a file, converting to directory to add entries.`);
                 dirListing = { type: "directory", entries: {}, created: Date.now() };
             }
         } catch(e) {
@@ -422,31 +514,43 @@ class FileSystem {
 
         if(!dirListing.entries) dirListing.entries = {};
 
-        const itemName = itemPath.substring(parentPath.length).replace(/^\//, '');
+        // itemPath could be "A:/foo/bar.txt" or "A:/foo/" (if it's a directory being created)
+        // parentPath is "A:/foo/" or "A:/"
+        // itemName should be "bar.txt" or "foo" (if itemPath is "A:/foo/")
+        let itemName = itemPath.substring(parentPath.length).replace(/^\//, '');
+        if(itemPath.endsWith('/')) itemName = itemName.slice(0,-1);
+
+
         dirListing.entries[itemName] = { type: itemType };
 
-        await this.storage.setItem(parentPath, JSON.stringify(dirListing));
+        await this.storage.setItem(storageParentPath, JSON.stringify(dirListing));
+        console.log(`Updated dir listing for ${parentPath} (key: ${storageParentPath}) - added ${itemName}`);
     }
 
-    async _removeDirectoryEntry(itemPath) {
-        const parentPath = this._getParentPath(itemPath);
+    async _removeDirectoryEntry(itemPath) { // itemPath is full path e.g. A:/foo/bar.txt or A:/foo/
+        const parentPath = this._getParentPath(itemPath); // e.g. A:/foo/ or A:/
         if (!parentPath) return;
 
-        let parentDirContent = await this.storage.getItem(parentPath);
-        if (!parentDirContent) return; // Parent directory doesn't exist or isn't tracked
+        const storageParentPath = this._getStorageKey(parentPath); // e.g. foo/ or ""
+
+        let parentDirContent = await this.storage.getItem(storageParentPath);
+        if (!parentDirContent) return;
 
         let dirListing;
         try {
             dirListing = JSON.parse(parentDirContent);
-            if(dirListing.type !== "directory" || !dirListing.entries) return; // Not a directory with entries
+            if(dirListing.type !== "directory" || !dirListing.entries) return;
         } catch(e) {
-            return; // Not valid JSON or not our directory format
+            return;
         }
 
-        const itemName = itemPath.substring(parentPath.length).replace(/^\//, '');
+        let itemName = itemPath.substring(parentPath.length).replace(/^\//, '');
+        if(itemPath.endsWith('/')) itemName = itemName.slice(0,-1);
+
         if (dirListing.entries[itemName]) {
             delete dirListing.entries[itemName];
-            await this.storage.setItem(parentPath, JSON.stringify(dirListing));
+            await this.storage.setItem(storageParentPath, JSON.stringify(dirListing));
+            console.log(`Updated dir listing for ${parentPath} (key: ${storageParentPath}) - removed ${itemName}`);
         }
     }
 
@@ -493,134 +597,157 @@ class FileSystem {
             }
         }
 
-        // Attempt to read the directory object itself first (for localStorageWrapper and indexedDBWrapper)
-        const dirObjectString = await this.storage.getItem(normalizedDirPath);
+        // Attempt to read the directory object itself first
+        // normalizedDirPath is full path e.g. A:/foo/ or A:/
+        const storageDirPathKey = this._getStorageKey(normalizedDirPath); // e.g. foo/ or ""
+        const dirObjectString = await this.storage.getItem(storageDirPathKey);
+
         if (dirObjectString) {
             try {
                 const dirObject = JSON.parse(dirObjectString);
                 if (dirObject && dirObject.type === "directory" && dirObject.entries) {
-                     console.log("Listing from directory object:", dirObject.entries);
+                     console.log(`Listing from directory object for ${normalizedDirPath} (key: ${storageDirPathKey}):`, dirObject.entries);
                     return Object.keys(dirObject.entries).map(name => ({
                         name,
                         type: dirObject.entries[name].type
                     }));
                 }
             } catch (e) {
-                // console.warn("Could not parse directory object for listing, falling back to prefix scan:", e);
+                 console.warn(`Could not parse directory object for ${normalizedDirPath} (key: ${storageDirPathKey}), falling back to prefix scan if applicable. Error:`, e);
             }
         }
 
+        // Fallback: Scan all keys (primarily for localStorageWrapper if explicit dir objects aren't perfectly maintained or for initial migration)
+        if (this.storage === localStorageWrapper) {
+            const allItems = await this.storage.getAllItems(); // These keys are already stripped for LS
+            if (!allItems) return [];
+            const entries = new Set();
+            // storageDirPathKey is like "foo/" or "" (for root)
 
-        // Fallback: Scan all keys for items under this path if not using explicit directory objects
-        // This is less efficient but works for simple key-value stores without explicit directory tracking.
-        const allItems = await this.storage.getAllItems();
-        if (!allItems) return [];
-
-        const entries = new Set(); // Use a Set to avoid duplicates if an item and its directory marker both exist
-
-        for (const key in allItems) {
-            if (key.startsWith(normalizedDirPath) && key !== normalizedDirPath) {
-                const relativePath = key.substring(normalizedDirPath.length);
-                const firstSlashIndex = relativePath.indexOf('/');
-                let entryName = relativePath;
-                let type = 'file'; // Assume file by default
-
-                if (firstSlashIndex !== -1) { // It's a subdirectory or a file within a subdirectory
-                    entryName = relativePath.substring(0, firstSlashIndex);
-                    type = 'directory';
-                } else {
-                     // Check if the key itself is a directory marker (ends with /)
-                    if(key.endsWith('/')) {
-                        type = 'directory';
-                        entryName = relativePath.slice(0,-1);
+            for (const key in allItems) { // key is like "foo/bar.txt" or "config.json" or "foo/"
+                if (storageDirPathKey === "") { // Root directory listing
+                    if (!key.includes('/')) { // File or empty dir marker at root
+                        if (key.endsWith('/')) { // "somedir/"
+                             entries.add(JSON.stringify({ name: key.slice(0,-1), type: 'directory' }));
+                        } else { // "file.txt"
+                             entries.add(JSON.stringify({ name: key, type: 'file' }));
+                        }
+                    } else { // "foo/bar.txt" or "foo/subdir/" -> "foo" is a directory at root
+                        entries.add(JSON.stringify({ name: key.substring(0, key.indexOf('/')), type: 'directory' }));
                     }
-                    // Or, check the content of the item if we store type info there
-                    // This part is simplified; a real system might parse JSON to check type
-                    else {
-                        const itemContent = allItems[key];
-                        try {
-                            const parsedContent = JSON.parse(itemContent);
-                            if(parsedContent && parsedContent.type === 'directory') {
-                                type = 'directory';
-                            }
-                        } catch(e) { /* Not JSON or no type info, assume file */ }
+                } else { // Subdirectory listing, storageDirPathKey is "foo/"
+                    if (key.startsWith(storageDirPathKey) && key !== storageDirPathKey) {
+                        const relativePath = key.substring(storageDirPathKey.length); // "bar.txt" or "subdir/" or "subdir/file.txt"
+                        const firstSlashIndex = relativePath.indexOf('/');
+                        let entryName = relativePath;
+                        let type = 'file';
+
+                        if (firstSlashIndex !== -1) { // "subdir/file.txt" or "subdir/"
+                            entryName = relativePath.substring(0, firstSlashIndex);
+                            type = 'directory';
+                        } else if (relativePath.endsWith('/')) { // "subdir/" (empty directory marker)
+                             type = 'directory';
+                             entryName = relativePath.slice(0,-1);
+                        }
+                        // else it's a file like "bar.txt"
+
+                        if(entryName) entries.add(JSON.stringify({ name: entryName, type }));
                     }
                 }
-                 if(entryName) entries.add(JSON.stringify({ name: entryName, type }));
             }
+            const parsedEntries = Array.from(entries).map(item => JSON.parse(item));
+            console.log(`Directory listing for ${normalizedDirPath} (localStorage prefix scan, key: ${storageDirPathKey}):`, parsedEntries);
+            return parsedEntries;
+        } else {
+             // For other adapters like IndexedDB, the getItem(normalizedDirPath) for dir object is expected to work.
+             // If not, their getAllItems() would return full paths, requiring different prefix logic.
+             // The current code assumes non-localStorage adapters use the explicit dir object model primarily.
+            console.log(`No directory object found for ${normalizedDirPath} and prefix scan not implemented for this adapter type.`);
+            return [];
         }
-         const parsedEntries = Array.from(entries).map(item => JSON.parse(item));
-         console.log(`Directory listing for ${normalizedDirPath} (prefix scan):`, parsedEntries);
-        return parsedEntries;
     }
 
      async exists(path) {
-        const normalizedPath = this._normalizePath(path);
-        const item = await this.storage.getItem(normalizedPath);
+        const normalizedPath = this._normalizePath(path); // e.g. A:/foo/bar.txt or A:/foo
+        const storageKey = this._getStorageKey(normalizedPath); // e.g. foo/bar.txt or foo
+
+        let item = await this.storage.getItem(storageKey);
         if (item !== null) return true;
 
-        // If it's potentially a directory, check for the directory marker
-        const directoryMarkerPath = normalizedPath.endsWith('/') ? normalizedPath : normalizedPath + '/';
-        const dirItem = await this.storage.getItem(directoryMarkerPath);
-        return dirItem !== null;
+        // If it's potentially a directory for localStorage, the key might need a trailing slash
+        if (this.storage === localStorageWrapper && !storageKey.endsWith('/') && normalizedPath !== this.basePath) {
+            const dirStorageKey = storageKey + '/';
+            item = await this.storage.getItem(dirStorageKey);
+            if (item !== null) return true;
+        } else if (this.storage !== localStorageWrapper) {
+            // For other storages, if path was "A:/foo", normalizedPath is "A:/foo".
+            // If a directory marker is stored with "A:/foo/", we need to check that.
+            const directoryMarkerPath = normalizedPath.endsWith('/') ? normalizedPath : normalizedPath + '/';
+            if (normalizedPath !== directoryMarkerPath) { // Avoid re-checking same key if already ends with /
+                 const dirStorageKey = this._getStorageKey(directoryMarkerPath); // Should be same as normalizedPath if not LS
+                 item = await this.storage.getItem(dirStorageKey);
+                 if (item !== null) return true;
+            }
+        }
+        return false;
     }
 
     async rename(oldPath, newPath) {
-        const normalizedOldPath = this._normalizePath(oldPath);
-        const normalizedNewPath = this._normalizePath(newPath);
+        const normalizedOldPath = this._normalizePath(oldPath); // e.g. A:/foo/bar.txt or A:/foo
+        const normalizedNewPath = this._normalizePath(newPath); // e.g. A:/foo/baz.txt or A:/bar
 
         if (normalizedOldPath === normalizedNewPath) return;
 
-        const content = await this.readFile(normalizedOldPath); // Use readFile to get parsed content
-        if (content === null) {
-            throw new Error(`Source path does not exist: ${oldPath}`);
-        }
+        // Determine if renaming a directory based on original path ending with /
+        // or by trying to read its content as a directory object.
+        let isDirectory = oldPath.endsWith('/');
+        let content = await this.readFile(normalizedOldPath); // readFile uses _getStorageKey
 
-        // Check if it's a directory (ends with / or is a directory object)
-        const isDirectory = oldPath.endsWith('/') || (typeof content === 'object' && content.type === 'directory');
+        if (!isDirectory && content && typeof content === 'object' && content.type === 'directory') {
+            isDirectory = true; // It's a directory object, even if path didn't end with /
+        }
+         if (content === null && !isDirectory) { // If content is null, and not explicitly a dir path, it might be an empty dir marker
+            if(await this.exists(oldPath + '/')) isDirectory = true;
+         }
+
 
         if (isDirectory) {
-            // If it's a directory, we need to "move" all its contents
-            // This is complex with key-value stores. A simple approach:
-            // 1. List all items under oldPath/
-            // 2. For each item, read its content
-            // 3. Write it to newPath/itemName
-            // 4. Delete the old item
-            // 5. Delete the old directory marker itself
+            let oldDirPathFull = oldPath; // Original full path for listDirectory
+            if(!oldDirPathFull.endsWith('/')) oldDirPathFull += '/';
 
-            let oldDirPath = normalizedOldPath;
-            if(!oldDirPath.endsWith('/')) oldDirPath += '/';
-            let newDirPath = normalizedNewPath;
-            if(!newDirPath.endsWith('/')) newDirPath += '/';
+            let newDirPathFull = newPath;
+            if(!newDirPathFull.endsWith('/')) newDirPathFull += '/';
 
+            // Storage keys for the directory markers themselves
+            const storageOldDirPath = this._getStorageKey(oldDirPathFull); // e.g. foo/ or olddir/
+            const storageNewDirPath = this._getStorageKey(newDirPathFull); // e.g. bar/ or newdir/
 
-            // Create the new directory marker first
-            await this.createDirectory(newDirPath); // Ensures the new parent path exists if it's a dir
+            await this.createDirectory(newDirPathFull); // Create new directory marker (uses _getStorageKey internally)
 
-            const entries = await this.listDirectory(oldPath); // Use oldPath, not normalizedOldPath here
+            const entries = await this.listDirectory(oldDirPathFull); // listDirectory uses full paths
             for (const entry of entries) {
-                const oldEntryPath = oldPath.endsWith('/') ? oldPath + entry.name : oldPath + '/' + entry.name;
-                const newEntryPath = newPath.endsWith('/') ? newPath + entry.name : newPath + '/' + entry.name;
-                await this.rename(oldEntryPath, newEntryPath); // Recursive call for entries
+                const oldEntryFullPath = oldDirPathFull + entry.name + (entry.type === 'directory' ? '/' : '');
+                const newEntryFullPath = newDirPathFull + entry.name + (entry.type === 'directory' ? '/' : '');
+                await this.rename(oldEntryFullPath, newEntryFullPath); // Recursive call with full paths
             }
 
-            // Delete the old directory marker
-            await this.storage.removeItem(oldDirPath);
-             this._removeDirectoryEntry(oldDirPath); // Update parent listing for old dir
-             this._updateDirectoryListing(newDirPath, 'directory'); // Update parent listing for new dir
+            await this.storage.removeItem(storageOldDirPath); // Delete old directory marker (using its storage key)
+            this._removeDirectoryEntry(oldDirPathFull);
+            this._updateDirectoryListing(newDirPathFull, 'directory');
 
-        } else {
-            // It's a file
-            // Stringify content again before writing, as readFile might parse it
+        } else { // It's a file
+            if (content === null) throw new Error(`Source file does not exist: ${oldPath}`);
+            const storageOldFilePath = this._getStorageKey(normalizedOldPath);
+            const storageNewFilePath = this._getStorageKey(normalizedNewPath);
+
             const contentToWrite = typeof content === 'string' ? content : JSON.stringify(content);
-            await this.storage.setItem(normalizedNewPath, contentToWrite);
-            await this.storage.removeItem(normalizedOldPath);
+            await this.storage.setItem(storageNewFilePath, contentToWrite);
+            await this.storage.removeItem(storageOldFilePath);
 
-            // Update directory listings
             this._removeDirectoryEntry(normalizedOldPath);
             this._updateDirectoryListing(normalizedNewPath, 'file');
         }
-        console.log(`Renamed ${normalizedOldPath} to ${normalizedNewPath}`);
+        console.log(`Renamed ${oldPath} to ${newPath}`);
     }
 
     getDriveLetter() {

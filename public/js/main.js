@@ -112,7 +112,7 @@ async function checkOSInstallationAndRedirect() {
                                 try {
                                     const response = await fetch('/api/os_update_info.json');
                                     if (!response.ok) {
-                                        throw new Error(`HTTP error! status: ${response.status}`);
+                                        throw new Error(\`HTTP error! status: \${response.status}\`);
                                     }
                                     const data = await response.json();
                                     latestServerVersionInfo = data; // Store fetched info
@@ -615,7 +615,7 @@ async function checkOSInstallationAndRedirect() {
 
         updatePrompt();
         inputElement.focus();
-        appendOutput("WebOS Terminal [Version 1.0.0]", "system");
+        appendOutput("Sour OS Terminal [Version 1.0.0]", "system");
         appendOutput("Type 'help' for a list of commands.", "system");
     }
 

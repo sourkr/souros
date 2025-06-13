@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     installButton.addEventListener('click', async () => {
         installButton.disabled = true;
-        installMessage.textContent = 'Installing WebOS... please wait.';
+        installMessage.textContent = 'Installing Sour OS... please wait.';
 
         try {
             // 1. Create A:/system directory (and A:/ if it doesn't exist conceptually)
@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await window.WebOSFileSystem.createDirectory('A:/Users/guest');
             await window.WebOSFileSystem.createDirectory('A:/Users/guest/Documents');
             await window.WebOSFileSystem.createDirectory('A:/Users/guest/Pictures');
-            await window.WebOSFileSystem.writeFile('A:/Users/guest/Documents/Welcome.txt', 'Welcome to your new WebOS installation!');
+            await window.WebOSFileSystem.writeFile('A:/Users/guest/Documents/Welcome.txt', 'Welcome to your new Sour OS installation!');
             console.log('Created default user directories and welcome file.');
 
             installMessage.textContent = 'Installation successful! Redirecting to the desktop...';

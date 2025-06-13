@@ -1,5 +1,6 @@
 // public/os-files/indexdb-driver.js
 (function() {
+    'use strict';
     if (!window.indexedDB) {
         console.warn("IndexedDB not supported by this browser. IndexDB driver will not be available.");
         return;
@@ -170,7 +171,7 @@
 
         driveSize: () => -1, // IndexedDB doesn't have a fixed size in this context
 
-        open: async function(path, ...flags) {
+        open: async function(path) { // Removed ...flags parameter
             await _initializeRootIfNeeded();
             const fPath = _formatPath(path);
             try {
@@ -186,7 +187,7 @@
                 } else {
                     fd = fdCounter++;
                 }
-                fds.set(fd, { path: fPath, flags: flags, metadata: metadata });
+                fds.set(fd, { path: fPath, metadata: metadata }); // Removed flags from fds
                 return fd;
             } catch (error) {
                 console.error(`open: Error opening path '${fPath}':`, error);
@@ -404,10 +405,10 @@
                 window.os.drives.set('B:', implementedDriverObject);
                 console.log("IndexedDB driver registered for Drive B and root initialized.");
              }).catch(err => {
-                console.error("Failed to initialize root for IndexedDB driver:", err);
+                console.error("IndexedDB Driver: Failed to initialize root. Driver NOT registered.", err);
              });
         }).catch(error => {
-            console.error("Failed to open IndexedDB for driver registration:", error);
+            console.error("IndexedDB Driver: Failed to open IndexedDB. Driver NOT registered.", error);
         });
     } else {
         console.error("Main OS object (window.os.drives) not found. Cannot register IndexedDB driver.");

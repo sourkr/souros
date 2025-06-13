@@ -1,5 +1,6 @@
 // public/os-files/browser-storage-driver.js
 (function() {
+    'use strict';
     if (!navigator.storage || !window.caches) {
         console.warn("Browser Storage (navigator.storage or Cache API) not supported. browser-storage-driver will not be available.");
         return;
@@ -57,14 +58,14 @@
         },
         _getParentPath: function(path) {
             const fPath = this._formatPath(path);
-            if (fPath === '/') return null;
+            if (fPath === '/') return null; // Root has no parent for this logic
             const lastSlash = fPath.lastIndexOf('/');
-            if (lastSlash === 0) return '/'; // Parent is root
-            return fPath.substring(0, lastSlash);
+            if (lastSlash === 0) return '/'; // Parent of /foo is /
+            return fPath.substring(0, lastSlash); // Parent of /foo/bar is /foo
         },
         _getFileName: function(path) {
             const fPath = this._formatPath(path);
-            if (fPath === '/') return '/';
+            if (fPath === '/') return '/'; // Or handle as special case, empty string?
             return fPath.substring(fPath.lastIndexOf('/') + 1);
         },
 
@@ -82,7 +83,7 @@
             }
         },
 
-        open: async function(path, ...flags) {
+        open: async function(path) { // Removed ...flags
             const fPath = this._formatPath(path);
             const urlPath = formatPathToUrl(fPath); // Path for Cache API
 
@@ -112,7 +113,7 @@
             } else {
                 fdId = fdCounter++;
             }
-            fds.set(fdId, { path: fPath, flags: flags, metadata: meta, urlPath: urlPath });
+            fds.set(fdId, { path: fPath, metadata: meta, urlPath: urlPath }); // Removed flags
             return fdId;
         },
 
@@ -200,7 +201,7 @@
                     entries = entries.filter(name => name !== itemName);
                 }
 
-                if (entries.length !== initialLength || (action === 'add' && initialLength === 0 && entries.length === 1) ) {
+                if (entries.length !== initialLength) { // Simplified condition
                     parentMeta.content = entries.join(',');
                     parentMeta.modified = Date.now();
                     this._setMetadata(parentPath, parentMeta);

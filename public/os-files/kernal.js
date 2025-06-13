@@ -1,4 +1,5 @@
 // public/os-files/kernal.js
+'use strict';
 console.log("kernal.js: Loading...");
 
 class Kernal {

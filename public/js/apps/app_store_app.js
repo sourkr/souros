@@ -98,7 +98,10 @@ export function initAppStoreApp(appContainer) {
                 const installButton = document.createElement('button');
                 installButton.style.padding = '5px 10px';
 
-                if (installedApps[app.id]) {
+                if (app.isSystemApp === true) {
+                    installButton.textContent = 'System App';
+                    installButton.disabled = true;
+                } else if (installedApps[app.id]) {
                     if (installedApps[app.id] < app.version) {
                         installButton.textContent = 'Update to v' + app.version;
                         installButton.onclick = () => handleInstallOrUpdate(app, true);

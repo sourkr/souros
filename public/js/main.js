@@ -1,8 +1,8 @@
 async function checkOSInstallationAndRedirect() {
     try {
         const osInstalledFlag = await window.WebOSFileSystem.readFile('A:/system/os_installed.flag');
-        if (osInstalledFlag !== 'true') {
-            console.log("OS not installed or flag not set. Redirecting to install page.");
+        if (String(osInstalledFlag) !== 'true') {
+            console.log("OS not installed or flag not set. Redirecting to install page. Flag value:", osInstalledFlag, "| Type:", typeof osInstalledFlag);
             if (!window.location.pathname.includes('/install/')) {
                  window.location.href = '/install/';
             }

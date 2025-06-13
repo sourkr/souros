@@ -86,14 +86,13 @@ export function initAppStoreApp(appContainer) {
                 appEntry.style.paddingBottom = '10px';
                 appEntry.style.marginBottom = '10px';
 
-                let appIconHtml = app.icon ? \`<img src="\${app.icon}" alt="\${app.name}" style="width: 24px; height: 24px; vertical-align: middle; margin-right: 10px;">\` : '';
+                let appIconHtml = app.icon ? '<img src="' + app.icon + '" alt="' + app.name + '" style="width: 24px; height: 24px; vertical-align: middle; margin-right: 10px;">' : '';
 
-                appEntry.innerHTML = \`
-                    \${appIconHtml}
-                    <strong>\${app.name}</strong> (v\${app.version}) <em style="font-size:0.8em; color: #555;">by \${app.developer || 'Unknown Dev'}</em>
-                    <p style="font-size: 0.9em; margin: 5px 0;">\${app.description}</p>
-                    <p style="font-size: 0.8em; color: #777;">Permissions: \${app.permissions && app.permissions.length > 0 ? app.permissions.join(', ') : 'none'}</p>
-                \`;
+                appEntry.innerHTML =
+                    appIconHtml +
+                    '<strong>' + app.name + '</strong> (v' + app.version + ') <em style="font-size:0.8em; color: #555;">by ' + (app.developer || 'Unknown Dev') + '</em>' +
+                    '<p style="font-size: 0.9em; margin: 5px 0;">' + app.description + '</p>' +
+                    '<p style="font-size: 0.8em; color: #777;">Permissions: ' + (app.permissions && app.permissions.length > 0 ? app.permissions.join(', ') : 'none') + '</p>';
 
                 const installButton = document.createElement('button');
                 installButton.style.padding = '5px 10px';
@@ -125,12 +124,12 @@ export function initAppStoreApp(appContainer) {
                 console.error('Drive B not available for app installation/update.');
                 return;
             }
-            statusElem.textContent = \`\${isUpdate ? 'Updating' : 'Installing'} \${app.name}...\`;
+            statusElem.textContent = (isUpdate ? 'Updating' : 'Installing') + ' ' + app.name + '...';
             // Simulate installation delay
             setTimeout(async () => {
                 installedApps[app.id] = app.version;
                 await saveInstalledAppsManifest();
-                statusElem.textContent = \`\${app.name} \${isUpdate ? 'updated' : 'installed'} successfully to v\${app.version}! (Restart WebOS or App Store to see changes in main app list - not simulated).\`;
+                statusElem.textContent = app.name + (isUpdate ? ' updated' : ' installed') + ' successfully to v' + app.version + '! (Restart WebOS or App Store to see changes in main app list - not simulated).';
                 renderApps(); // Re-render to update button states
                 // This console warning is good for developers
                 console.warn("App '" + app.name + "' processed. Manual refresh or advanced inter-app communication needed to see it live in desktop for now.");
@@ -142,7 +141,7 @@ export function initAppStoreApp(appContainer) {
             try {
                 const response = await fetch('/api/app_store_catalog.json');
                 if (!response.ok) {
-                    throw new Error(\`HTTP error! status: \${response.status}\`);
+                    throw new Error('HTTP error! status: ' + response.status);
                 }
                 catalogApps = await response.json();
             } catch (error) {

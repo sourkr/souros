@@ -188,7 +188,7 @@ function _initializeTerminalInternal(appWindow, appContainer) {
                     // Attempt to list directory to check if it's valid
                     await window.WebOSFileSystem.listDirectory(newPotentialPath);
                     appWindow.dataset.terminalCwd = newPotentialPath;
-                } catch (e) {
+                } catch (_e) {
                     // If listDirectory fails, it's either not a directory or doesn't exist
                     appendOutput(`cd: ${args.join(' ')}: No such directory or not a directory`, 'error');
                 }

@@ -292,7 +292,7 @@ async function checkOSInstallationAndRedirect() {
                                 try {
                                     const response = await fetch('/api/app_store_catalog.json');
                                     if (!response.ok) {
-                                        throw new Error(`HTTP error! status: ${response.status}`);
+                                        throw new Error(\`HTTP error! status: \${response.status}\`);
                                     }
                                     catalogApps = await response.json();
                                 } catch (error) {

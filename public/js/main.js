@@ -127,7 +127,7 @@ async function checkOSInstallationAndRedirect() {
                                 try {
                                     const response = await fetch('/api/os_update_info.json');
                                     if (!response.ok) {
-                                        throw new Error(`HTTP error! status: ${response.status}`);
+                                        throw new Error(\`HTTP error! status: \${response.status}\`);
                                     }
                                     const data = await response.json();
                                     latestServerVersionInfo = data; // Store fetched info
@@ -307,7 +307,7 @@ async function checkOSInstallationAndRedirect() {
                                 try {
                                     const response = await fetch('/api/app_store_catalog.json');
                                     if (!response.ok) {
-                                        throw new Error(`HTTP error! status: ${response.status}`);
+                                        throw new Error(\`HTTP error! status: \${response.status}\`);
                                     }
                                     catalogApps = await response.json();
                                 } catch (error) {
@@ -419,7 +419,208 @@ async function checkOSInstallationAndRedirect() {
         }
     }
 
-    function renderFileExplorer(appWindow, pathArray) {
+    function initializeTerminal(appWindow) {
+        const outputElement = appWindow.querySelector('.terminal-output');
+        const inputElement = appWindow.querySelector('.terminal-input');
+        const promptElement = appWindow.querySelector('.terminal-prompt');
+
+        appWindow.dataset.terminalCwd = "A:/";
+        appWindow.dataset.terminalHistory = JSON.stringify([]);
+        appWindow.dataset.terminalHistoryIndex = "-1";
+
+        const appendOutput = (text, type = 'info') => {
+            const line = document.createElement('div');
+            if (type === 'command') {
+                line.textContent = `${promptElement.textContent}${text}`;
+                line.style.color = "#80ccff"; // Light blue for commands
+            } else if (type === 'error') {
+                line.textContent = `Error: ${text}`;
+                line.style.color = "#ff8080"; // Light red for errors
+            } else if (type === 'system') {
+                 line.textContent = `SYSTEM: ${text}`;
+                 line.style.color = "#a0a0a0"; // Grey for system messages
+            }
+             else {
+                line.textContent = text;
+            }
+            outputElement.appendChild(line);
+            outputElement.scrollTop = outputElement.scrollHeight;
+        };
+
+        const updatePrompt = () => {
+            promptElement.textContent = `${appWindow.dataset.terminalCwd}> `;
+        };
+
+        const resolvePath = (path) => {
+            if (!path || path.trim() === '') return appWindow.dataset.terminalCwd;
+            if (path.includes(':')) return path.endsWith('/') ? path : path + '/'; // Absolute path
+
+            let currentCwd = appWindow.dataset.terminalCwd; // e.g., "A:/" or "A:/folder/"
+            if (!currentCwd.endsWith('/')) currentCwd += '/';
+
+            if (path === '.') return currentCwd;
+            if (path === '..') {
+                if (currentCwd.endsWith(':/')) return currentCwd; // Already at root of drive
+                return currentCwd.substring(0, currentCwd.slice(0, -1).lastIndexOf('/') + 1);
+            }
+            return currentCwd + path + (path.endsWith('/') ? '' : '/');
+        };
+
+
+        const executeCommand = async (fullCommand) => {
+            appendOutput(fullCommand, 'command');
+            const [command, ...args] = fullCommand.trim().split(/\s+/);
+            const history = JSON.parse(appWindow.dataset.terminalHistory);
+            if (fullCommand.trim() !== "" && (history.length === 0 || history[history.length -1] !== fullCommand.trim())) {
+                 history.push(fullCommand.trim());
+            }
+            appWindow.dataset.terminalHistory = JSON.stringify(history);
+            appWindow.dataset.terminalHistoryIndex = history.length;
+
+
+            switch (command.toLowerCase()) {
+                case 'help':
+                    appendOutput("Available commands:\n" +
+                        "  help                       - Shows this help message\n" +
+                        "  ls [path]                  - Lists directory contents\n" +
+                        "  cat <filePath>             - Displays file content\n" +
+                        "  echo [text ...]            - Displays text\n" +
+                        "  clear                      - Clears the terminal output\n" +
+                        "  cd <path>                  - Changes current directory");
+                    break;
+                case 'ls':
+                    try {
+                        const targetPath = args.length > 0 ? resolvePath(args.join(' ')) : appWindow.dataset.terminalCwd;
+                        const items = await WebOSFileSystem.listDirectory(targetPath);
+                        if (items.length === 0) {
+                            appendOutput("Directory is empty.");
+                        } else {
+                            items.forEach(item => appendOutput(`${item.type === 'directory' ? '[D]' : '[F]'} ${item.name}`));
+                        }
+                    } catch (e) {
+                        appendOutput(e.message, 'error');
+                    }
+                    break;
+                case 'cat':
+                    if (args.length === 0) {
+                        appendOutput("Usage: cat <filePath>", 'error');
+                        break;
+                    }
+                    try {
+                        const filePath = resolvePath(args.join(' ')).replace(/\/$/, ''); // remove trailing slash for files
+                        const content = await WebOSFileSystem.readFile(filePath);
+                        if (typeof content === 'object') {
+                           appendOutput(JSON.stringify(content, null, 2));
+                        } else {
+                           appendOutput(content);
+                        }
+                    } catch (e) {
+                        appendOutput(e.message, 'error');
+                    }
+                    break;
+                case 'echo':
+                    appendOutput(args.join(' '));
+                    break;
+                case 'clear':
+                    outputElement.innerHTML = '';
+                    break;
+                case 'cd':
+                    if (args.length === 0) {
+                        appendOutput("Usage: cd <path>", 'error');
+                        break;
+                    }
+                    try {
+                        const newPathArg = args.join(' ');
+                        let newPotentialPath = resolvePath(newPathArg);
+                        if (!newPotentialPath.endsWith('/')) newPotentialPath += '/';
+
+                        // Check if path exists and is a directory
+                        // WebOSFileSystem.exists might need to understand directory paths (ending with /)
+                        // A simple way: try to list it. If it fails, or lists nothing and it's not the same path, it's an issue.
+                        // Or, if WebOSFileSystem.exists can confirm a directory, use that.
+                        // For now, we assume any path given to cd could be valid and just set it.
+                        // A robust 'cd' would verify the path is a valid directory.
+                        // Let's try a pseudo-validation: list and see if it errors or is a known file
+
+                        if (newPathArg.includes(':') && newPathArg.endsWith(':') && newPathArg.length === 2) { // e.g. "A:"
+                             appWindow.dataset.terminalCwd = newPathArg + "/";
+                        } else if (await WebOSFileSystem.exists(newPotentialPath) || await WebOSFileSystem.exists(newPotentialPath.slice(0,-1))) {
+                            // Try listing to confirm it's directory-like.
+                            // This is a bit of a hack. A proper 'isDirectory' or 'stat' function in FileSystem would be better.
+                            let isDir = false;
+                            try {
+                                await WebOSFileSystem.listDirectory(newPotentialPath); // Throws if it's a file or invalid
+                                isDir = true;
+                            } catch(e_isDir) {
+                                // If newPotentialPath is "C:/quota.txt/", listDirectory would fail.
+                                // If it was "C:/", listDirectory on persistentStorageApiWrapper would work.
+                                // If it was "A:/file.txt/", listDirectory would fail.
+                                // We also need to handle if the path *is* a file.
+                                const fileContent = await WebOSFileSystem.readFile(newPotentialPath.slice(0,-1));
+                                if(fileContent !== null) { // It's a file
+                                     isDir = false;
+                                     appendOutput(`Path is a file: ${newPotentialPath.slice(0,-1)}`, 'error');
+                                } else {
+                                     isDir = true; // If readFile is null, it might be a dir or non-existent
+                                }
+                            }
+
+                            if(isDir){
+                                appWindow.dataset.terminalCwd = newPotentialPath;
+                            }
+                        } else {
+                             appendOutput(`Path not found: ${newPotentialPath}`, 'error');
+                        }
+                    } catch (e) {
+                        appendOutput(e.message, 'error');
+                    }
+                    break;
+                default:
+                    if (command.trim() !== '') {
+                        appendOutput(`Unknown command: ${command}`, 'error');
+                    }
+            }
+            updatePrompt();
+            inputElement.value = '';
+            inputElement.focus();
+        };
+
+        inputElement.addEventListener('keydown', (e) => {
+            const history = JSON.parse(appWindow.dataset.terminalHistory);
+            let historyIndex = parseInt(appWindow.dataset.terminalHistoryIndex, 10);
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                executeCommand(inputElement.value);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (history.length > 0 && historyIndex > 0) {
+                    historyIndex--;
+                } else if (history.length > 0 && historyIndex <= 0) {
+                    historyIndex = 0; // Stay on the first item
+                }
+                 if(history[historyIndex]) inputElement.value = history[historyIndex];
+                 appWindow.dataset.terminalHistoryIndex = historyIndex;
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (history.length > 0 && historyIndex < history.length - 1) {
+                    historyIndex++;
+                     if(history[historyIndex]) inputElement.value = history[historyIndex];
+                } else {
+                    historyIndex = history.length; // Point after last item
+                    inputElement.value = ''; // Clear for new command
+                }
+                appWindow.dataset.terminalHistoryIndex = historyIndex;
+            }
+        });
+
+        updatePrompt();
+        inputElement.focus();
+        appendOutput("Sour OS Terminal [Version 1.0.0]", "system");
+        appendOutput("Type 'help' for a list of commands.", "system");
+    }
+
+    async function renderFileExplorer(appWindow, currentPathString) {
         const targetDiv = appWindow.querySelector('.file-explorer-main-area');
         if (!targetDiv) {
             console.error("Target div for file explorer not found in window:", appWindow);

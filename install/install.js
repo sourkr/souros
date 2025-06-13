@@ -12,6 +12,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if(installMessage) installMessage.textContent = 'Error: FileSystem API not available. Cannot proceed.';
         installButton.disabled = true;
         return;
+    } else if (!window.WebOSFileSystem.getDrive('A')) {
+        console.error('WebOSFileSystem is available, but Drive A is not initialized. localstorage-driver.js might have failed to load or register before storage.js.');
+        if(installMessage) installMessage.textContent = 'Error: Drive A is not available. Installation files might be missing or corrupted.';
+        installButton.disabled = true;
+        return;
+    }
+    // New check to see if Drive A's storage driver is actually present,
+    // which is now expected to be the os.drives.get('A:') instance.
+    // This is a more robust check post-refactor.
+    else {
+        const driveA = window.WebOSFileSystem.getDrive('A');
+        if (!driveA.storage || typeof driveA.storage.open !== 'function') { // Check for a key method of the new driver
+             console.error('Drive A is present but its underlying storage driver (localstorage-driver.js) seems to be missing or not correctly registered.');
+             if(installMessage) installMessage.textContent = 'Error: Critical storage component for Drive A is missing.';
+             installButton.disabled = true;
+             return;
+        }
+        console.log("WebOSFileSystem and Drive A appear to be correctly initialized.");
     }
 
     installButton.addEventListener('click', async () => {

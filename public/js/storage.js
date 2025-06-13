@@ -216,10 +216,15 @@ class FileSystem {
         if (!path.startsWith('/')) {
             path = '/' + path;
         }
-        // Replace multiple slashes with a single slash, but not at the beginning
-        path = '/' + path.replace(/\/+/g, '/').replace(/^\//,'');
-        if (!path.startsWith('/')) { // Ensure it still starts with / after replacement
-            path = '/' + path;
+        // Replace multiple slashes with a single slash
+        path = path.replace(/\/+/g, '/');
+        // Ensure it's not empty or just "//" -> "/"
+        if (path === '//') {
+            path = '/';
+        }
+        // If it became empty (e.g. from "A:/"), ensure it's "/"
+        if (path === '') {
+            path = '/';
         }
         return path;
     }
@@ -328,16 +333,41 @@ class FileSystem {
 
             let fd = -1;
             try {
-                fd = this.storage.open(driverPath, 'wc'); // write, create, truncate
+                // Create the file entry first.
+                // The localstorage-driver's create() method handles metadata and parent directory listing.
+                // It returns 0 on success, -1 on error (e.g., already exists as different type, or parent path issue).
+                const createResult = this.storage.create(driverPath);
+                if (createResult === -1) {
+                    // Check if it already exists as a file, which might be okay for overwriting.
+                    // Open + stat to check. This is a bit complex if create itself doesn't allow re-creation of files.
+                    // For now, let's assume create() is okay or subsequent open for write handles it.
+                    // If create fails because it *is* a file, open 'write' should proceed.
+                    // If create fails for other reasons (e.g. parent not dir), then it's an error.
+                    // The driver's create() logs "File already exists" and returns 0 if it's a file.
+                    // It returns -1 if parent is not a dir or path is invalid.
+                    // So a -1 from create() is a more serious error.
+                    // Let's assume if createResult is -1, it's a hard error.
+                    // Re-checking localstorage-driver.js: create() returns 0 if already exists as file or successfully created.
+                    // Returns -1 if parent path doesn't exist or isn't a directory.
+                    if (createResult === -1) { // Strict check, means parent path issue or invalid path
+                        throw new Error(`Failed to create file entry (metadata) for: ${driverPath}. Parent directory might not exist.`);
+                    }
+                }
+
+                fd = this.storage.open(driverPath, 'write'); // Open for writing
                 if (fd === -1) throw new Error(`Failed to open file for writing: ${driverPath}`);
 
-                const bytesWritten = this.storage.write(fd, stringContent, 0, stringContent.length, 0);
+                // The localstorage-driver's write(fd, data) returns bytes written or -1 on error.
+                const bytesWritten = this.storage.write(fd, stringContent);
                 if (bytesWritten < 0) throw new Error(`Failed to write to file: ${driverPath}`);
 
                 this.storage.close(fd);
+                fd = -1; // Mark as closed
                 console.log(`File written (new driver): ${driverPath}`);
             } catch (error) {
-                if (fd !== -1) this.storage.close(fd); // Ensure cleanup
+                if (fd !== -1) {
+                    try { this.storage.close(fd); } catch (e) { console.error("Error closing fd during error handling:", e); }
+                }
                 console.error(`Error writing file ${driverPath} (new driver):`, error);
                 throw error;
             }
@@ -369,39 +399,64 @@ class FileSystem {
             const driverPath = this._getDriverPath(filePath);
             let fd = -1;
             try {
+            let fd = -1;
+            try {
                 fd = this.storage.open(driverPath, 'r'); // read-only
                 if (fd === -1) {
-                    console.warn(`File not found (new driver): ${driverPath}`);
+                    // console.warn(`File not found or could not be opened for reading (new driver): ${driverPath}`);
+                    // Standard behavior is often to throw an error or return null.
+                    // Let's be consistent with old logic: return null.
                     return null;
                 }
 
                 const stat = this.storage.stat(fd);
-                if (!stat || stat.type !== 'file') {
+                if (!stat) { // stat itself failed or returned nullish
                     this.storage.close(fd);
-                    console.warn(`Not a file or stat failed (new driver): ${driverPath}`);
+                    fd = -1;
+                    console.warn(`Stat failed after open (new driver): ${driverPath}`);
+                    // This case implies an issue with an opened file, potentially.
+                    // Or stat is designed to be called on an fd that might be invalid after all.
+                    // Driver's stat(fd) returns table entry or null if fd is not in fds map.
+                    // If open succeeded, fd should be in fds map.
                     return null;
                 }
 
-                // The driver's read returns the string content directly.
-                // Buffer, offset, length, position args are for compatibility but driver handles it.
-                const content = this.storage.read(fd, null, 0, stat.size, 0);
-                this.storage.close(fd);
+                if (stat.type !== 'file') {
+                    this.storage.close(fd);
+                    fd = -1;
+                    console.warn(`Not a file (new driver): ${driverPath}, type: ${stat.type}`);
+                    return null; // Or throw error, as it's not a file
+                }
 
-                if (content === null || content === -1) { // Check for read error from driver
+                // The localstorage-driver's read(fd) returns the content string or null on error.
+                const content = this.storage.read(fd);
+
+                this.storage.close(fd);
+                fd = -1; // Mark as closed
+
+                if (content === null) { // Check for read error from driver
                     console.warn(`Failed to read file content (new driver): ${driverPath}`);
                     return null;
                 }
 
                 console.log(`File read (new driver): ${driverPath}`);
                 try {
-                    return JSON.parse(content);
+                    // Attempt to parse if content looks like JSON, otherwise return as string
+                    // This is the same behavior as the old logic branch.
+                    if (typeof content === 'string' && ((content.startsWith('{') && content.endsWith('}')) || (content.startsWith('[') && content.endsWith(']')))) {
+                        return JSON.parse(content);
+                    }
+                    return content;
                 } catch (e) {
+                    // If JSON.parse fails, return the original content string
                     return content;
                 }
             } catch (error) {
-                if (fd !== -1) this.storage.close(fd);
+                if (fd !== -1) {
+                    try { this.storage.close(fd); } catch (e) { console.error("Error closing fd during error handling:", e); }
+                }
                 console.error(`Error reading file ${driverPath} (new driver):`, error);
-                throw error;
+                throw error; // Re-throw original error
             }
         } else {
             // Old logic
@@ -429,31 +484,12 @@ class FileSystem {
     async deleteFile(filePath) { // filePath can be for a file or a directory
         if (this.isNewLocalStorageDriver) {
             const driverPath = this._getDriverPath(filePath);
-            try {
-                const stat = this.storage.stat(driverPath); // Stat by path
-                if (!stat) {
-                    console.warn(`deleteFile: Item not found (new driver): ${driverPath}`);
-                    return; // Or throw error
-                }
-
-                let result = -1;
-                if (stat.type === 'file') {
-                    result = this.storage.unlink(driverPath);
-                } else if (stat.type === 'dir') {
-                    result = this.storage.rmdir(driverPath);
-                } else {
-                    throw new Error(`Unknown item type for deletion: ${stat.type}`);
-                }
-
-                if (result === 0) {
-                    console.log(`Item deleted (new driver): ${driverPath}`);
-                } else {
-                    throw new Error(`Failed to delete item (new driver): ${driverPath}, driver code: ${result}`);
-                }
-            } catch (error) {
-                console.error(`Error deleting item ${driverPath} (new driver):`, error);
-                throw error;
-            }
+            // The localstorage-driver.js does not currently implement unlink or rmdir.
+            // Therefore, deletion is a no-op for this driver.
+            console.warn(`deleteFile operation is not supported for Drive A (new driver) due to missing 'unlink/rmdir' in driver: ${driverPath}. No action taken.`);
+            // To prevent errors if called, simply return or do nothing.
+            // If this needs to throw an error, change the behavior here.
+            return; // Or perhaps: throw new Error("Delete operation not supported by this driver.");
         } else {
             // Old logic
             const normalizedPath = this._normalizePath(filePath);
@@ -484,20 +520,21 @@ class FileSystem {
             const driverPath = this._getDriverPath(dirPath);
             try {
                 const result = this.storage.mkdir(driverPath);
+                // The localstorage-driver mkdir(path) returns:
+                //   0 if directory created successfully OR if it already exists as a directory.
+                //  -1 if parent path does not exist or is not a directory,
+                //     OR if a file with the same name already exists at that path.
                 if (result === 0) {
-                    console.log(`Directory created (new driver): ${driverPath}`);
-                } else if (result === -1) { // Assuming -1 for error (e.g. already exists, or parent not found)
-                    // Check if it already exists
-                    const stat = this.storage.stat(driverPath);
-                    if (stat && stat.type === 'dir') {
-                        console.log(`Directory already exists (new driver): ${driverPath}`);
-                        return; // Not an error if already exists as a directory
-                    }
-                    throw new Error(`Failed to create directory (new driver): ${driverPath}, driver code: ${result}`);
+                    console.log(`Directory operation successful (created or already exists as dir) (new driver): ${driverPath}`);
+                } else { // result === -1
+                    // The driver itself logs specific reasons for mkdir failure (e.g. parent not found, file exists)
+                    // So, a generic error message here is sufficient.
+                    throw new Error(`Failed to create directory (new driver): ${driverPath}. Driver error code: ${result}. Possible reasons: parent path issue, or a file exists at this path.`);
                 }
             } catch (error) {
-                console.error(`Error creating directory ${driverPath} (new driver):`, error);
-                throw error;
+                // Catch errors from mkdir itself (e.g. if it throws) or the re-thrown error above.
+                console.error(`Error creating directory ${driverPath} (new driver):`, error.message); // Log only message to avoid redundancy if error is re-thrown
+                throw error; // Re-throw the error for the caller to handle
             }
         } else {
             // Old logic
@@ -592,32 +629,84 @@ class FileSystem {
     async listDirectory(dirPath = '') {
         if (this.isNewLocalStorageDriver) {
             const driverPath = this._getDriverPath(dirPath);
+            let dirFd = -1;
+            const results = [];
+
             try {
-                const entries = this.storage.readdir(driverPath);
-                if (!entries) {
-                    // Check if the directory itself exists but is empty or readdir failed
-                    const stat = this.storage.stat(driverPath);
-                    if (stat && stat.type === 'dir') return []; // Exists and is a dir, so empty
-                    throw new Error(`Failed to list directory (new driver): ${driverPath} or path is not a directory.`);
+                dirFd = this.storage.open(driverPath, 'r');
+                if (dirFd === -1) {
+                    // Try to stat the path to see if it's not a dir or doesn't exist
+                    // This requires a temporary fd for stat if stat only takes fd
+                    // For now, assume open failing means it's not a readable directory
+                    console.warn(`listDirectory: Directory not found or not accessible (new driver): ${driverPath}`);
+                    return []; // Return empty array, consistent with non-existent dir
                 }
-                // The new driver returns array of { name, type }, which is compatible.
-                console.log(`Directory listing for ${driverPath} (new driver):`, entries);
-                return entries;
-            } catch (error) {
-                console.error(`Error listing directory ${driverPath} (new driver):`, error);
-                // If dir doesn't exist, readdir might return null or throw. Let's check stat.
-                try {
-                    const statCheck = this.storage.stat(driverPath);
-                    if (!statCheck) { // If stat also says it doesn't exist
-                         console.warn(`listDirectory: Directory not found (new driver): ${driverPath}`);
-                         return []; // Or throw an error
-                    } else if (statCheck.type !== 'dir') {
-                        console.warn(`listDirectory: Path is not a directory (new driver): ${driverPath}`);
-                        return []; // Or throw an error
+
+                // Check if it's actually a directory
+                const dirStat = this.storage.stat(dirFd);
+                if (!dirStat || dirStat.type !== 'dir') {
+                    this.storage.close(dirFd);
+                    console.warn(`listDirectory: Path is not a directory (new driver): ${driverPath}, type: ${dirStat ? dirStat.type : 'unknown'}`);
+                    return [];
+                }
+
+                // Read the directory contents (comma-separated names)
+                // The driver's readdir(fd) uses read(fd) which returns the content string
+                const dirContentsString = this.storage.read(dirFd); // driver's read(fd)
+                this.storage.close(dirFd); // Close directory fd immediately after read
+                dirFd = -1;
+
+                if (!dirContentsString) { // Empty string or null
+                    console.log(`Directory is empty or read failed (new driver): ${driverPath}`);
+                    return [];
+                }
+
+                const names = dirContentsString.split(',').filter(name => name.trim() !== '');
+                if (names.length === 0 && dirContentsString.length > 0) { // e.g. content was just "," or " , "
+                     console.log(`Directory listing produced no valid names after split, though content was present (new driver): ${driverPath}`);
+                     return [];
+                }
+
+
+                for (const name of names) {
+                    const itemDriverPath = (driverPath === '/' ? '' : driverPath) + '/' + name;
+                    let itemFd = -1;
+                    try {
+                        itemFd = this.storage.open(itemDriverPath, 'r');
+                        if (itemFd === -1) {
+                            console.warn(`listDirectory: Could not open item '${name}' in directory '${driverPath}' (new driver). Skipping.`);
+                            continue;
+                        }
+                        const itemStat = this.storage.stat(itemFd);
+                        if (!itemStat) {
+                            console.warn(`listDirectory: Could not stat item '${name}' in directory '${driverPath}' (new driver). Skipping.`);
+                            this.storage.close(itemFd);
+                            continue;
+                        }
+                        results.push({ name: name, type: itemStat.type });
+                        this.storage.close(itemFd);
+                        itemFd = -1;
+                    } catch (itemError) {
+                        if (itemFd !== -1) {
+                            try { this.storage.close(itemFd); } catch (e) { console.error("Error closing itemFd during itemError handling:", e); }
+                        }
+                        console.warn(`listDirectory: Error processing item '${name}' in '${driverPath}' (new driver):`, itemError.message);
                     }
-                } catch (statError) {
-                    // ignore stat error if original error is more relevant
                 }
+                console.log(`Directory listing for ${driverPath} (new driver):`, results);
+                return results;
+
+            } catch (error) {
+                if (dirFd !== -1) {
+                    try { this.storage.close(dirFd); } catch (e) { console.error("Error closing dirFd during error handling:", e); }
+                }
+                console.error(`Error listing directory ${driverPath} (new driver):`, error.message);
+                // Check original error. If it indicates "not a directory" or "not found", return empty array.
+                // This requires inspecting the error message, which is fragile.
+                // For now, rethrow unless specific conditions met.
+                // Based on current driver, open() returns -1 for not found.
+                // If error came from `open` returning -1 initially, it would have returned [] already.
+                // So this catch is for other unexpected errors.
                 throw error;
             }
         } else {
@@ -682,13 +771,28 @@ class FileSystem {
      async exists(path) {
         if (this.isNewLocalStorageDriver) {
             const driverPath = this._getDriverPath(path);
+            let fd = -1;
             try {
-                const stat = this.storage.stat(driverPath);
-                return !!stat; // If stat returns an object, it exists.
+                fd = this.storage.open(driverPath, 'r'); // Open for reading to check existence
+                if (fd === -1) {
+                    // If open fails, it doesn't exist or is not accessible.
+                    return false;
+                }
+                // If open succeeds, an entry exists. We should still stat it to be sure,
+                // and importantly, we need to close the fd.
+                const statInfo = this.storage.stat(fd);
+                this.storage.close(fd);
+                fd = -1; // Mark as closed
+
+                // If statInfo is null (e.g. fd was somehow invalid for stat after open, though unlikely here),
+                // this will correctly return false. Otherwise, true.
+                return !!statInfo;
             } catch (error) {
-                // stat might throw if path is invalid, or return null/error code for not found.
-                // The current new driver's stat returns null for not found.
-                console.warn(`Exists check failed or item not found (new driver): ${driverPath}`, error);
+                // Catch any errors from open, stat, or close.
+                if (fd !== -1) {
+                    try { this.storage.close(fd); } catch (e) { console.error("Error closing fd during exists error handling:", e); }
+                }
+                console.warn(`Exists check failed for ${driverPath} (new driver):`, error.message);
                 return false;
             }
         } else {
@@ -718,76 +822,13 @@ class FileSystem {
             const oldDriverPath = this._getDriverPath(oldPath);
             const newDriverPath = this._getDriverPath(newPath);
 
-            if (oldDriverPath === newDriverPath) return;
-
-            try {
-                const stat = this.storage.stat(oldDriverPath);
-                if (!stat) throw new Error(`Source path does not exist: ${oldDriverPath}`);
-
-                if (stat.type === 'file') {
-                    // Read old file
-                    let fdOld = -1, fdNew = -1;
-                    try {
-                        fdOld = this.storage.open(oldDriverPath, 'r');
-                        if (fdOld === -1) throw new Error(`Cannot open source file for rename: ${oldDriverPath}`);
-                        const content = this.storage.read(fdOld, null, 0, stat.size, 0);
-                        this.storage.close(fdOld);
-                        fdOld = -1;
-
-                        if (content === null || content === -1) throw new Error(`Cannot read source file for rename: ${oldDriverPath}`);
-
-                        // Write to new file
-                        fdNew = this.storage.open(newDriverPath, 'wc');
-                        if (fdNew === -1) throw new Error(`Cannot open target file for rename: ${newDriverPath}`);
-                        const written = this.storage.write(fdNew, content, 0, content.length, 0);
-                        this.storage.close(fdNew);
-                        fdNew = -1;
-                        if (written < 0) throw new Error(`Cannot write to target file for rename: ${newDriverPath}`);
-
-                        // Delete old file
-                        const unlinked = this.storage.unlink(oldDriverPath);
-                        if (unlinked !== 0) throw new Error(`Failed to delete source file after copying: ${oldDriverPath}`);
-
-                    } finally {
-                        if (fdOld !== -1) this.storage.close(fdOld);
-                        if (fdNew !== -1) this.storage.close(fdNew);
-                    }
-                } else if (stat.type === 'dir') {
-                    // Recursive rename for directory
-                    // 1. Create new directory
-                    const mkNewDir = this.storage.mkdir(newDriverPath);
-                    if (mkNewDir !== 0) {
-                        // Check if it's because it already exists
-                        const newStat = this.storage.stat(newDriverPath);
-                        if (!newStat || newStat.type !== 'dir') {
-                           throw new Error(`Failed to create target directory for rename: ${newDriverPath}`);
-                        }
-                    }
-
-                    // 2. List entries in old directory
-                    const entries = this.storage.readdir(oldDriverPath);
-                    if (entries) { // If null, it's an empty dir or error
-                        for (const entry of entries) {
-                            const oldEntryDriverPath = oldDriverPath === '/' ? `/${entry.name}` : `${oldDriverPath}/${entry.name}`;
-                            const newEntryDriverPath = newDriverPath === '/' ? `/${entry.name}` : `${newDriverPath}/${entry.name}`;
-                            // Paths for recursive call need to be relative to drive root (which _getDriverPath ensures)
-                            // but here they are already driver paths. We need to pass them to the public `rename`
-                            // which expects paths like "A:/foo" or "foo"
-                            await this.rename(oldEntryDriverPath, newEntryDriverPath); // Recursive call
-                        }
-                    }
-                    // 3. Delete old directory (should be empty now)
-                    const rmOldDir = this.storage.rmdir(oldDriverPath);
-                    if (rmOldDir !== 0) throw new Error(`Failed to remove source directory after moving contents: ${oldDriverPath}`);
-                } else {
-                    throw new Error(`Unknown type for rename: ${stat.type} at ${oldDriverPath}`);
-                }
-                console.log(`Renamed ${oldDriverPath} to ${newDriverPath} (new driver)`);
-            } catch (error) {
-                console.error(`Error renaming ${oldDriverPath} to ${newDriverPath} (new driver):`, error);
-                throw error;
-            }
-
+            // The localstorage-driver.js does not currently implement rename, unlink, or rmdir.
+            // Therefore, rename is a no-op for this driver.
+            console.warn(`rename operation is not supported for Drive A (new driver) due to missing driver primitives: ${oldDriverPath} to ${newDriverPath}. No action taken.`);
+            // To prevent errors if called, simply return or do nothing.
+            // If this needs to throw an error, change the behavior here.
+            // Throwing an error might be more appropriate for a failed operation.
+            throw new Error(`Rename operation not supported by this driver for paths: ${oldDriverPath} to ${newDriverPath}`);
         } else {
             // Old logic
             const normalizedOldPath = this._normalizePath(oldPath);

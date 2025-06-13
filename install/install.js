@@ -19,6 +19,26 @@ document.addEventListener('DOMContentLoaded', () => {
         installMessage.textContent = 'Installing Sour OS... please wait.';
 
         try {
+            // Create A:/SourOS directory
+            installMessage.textContent = 'Creating A:/SourOS directory...';
+            await window.WebOSFileSystem.createDirectory('A:/SourOS');
+            console.log('Created directory A:/SourOS');
+
+            // Fetch and store localstorage-driver.js
+            installMessage.textContent = 'Fetching OS components...';
+            const response = await fetch('/os-files/localstorage-driver.js'); // Path relative to web root
+            if (!response.ok) {
+                throw new Error(`Failed to fetch /os-files/localstorage-driver.js: ${response.status} ${response.statusText}`);
+            }
+            const driverContent = await response.text();
+            console.log('Fetched /os-files/localstorage-driver.js');
+
+            installMessage.textContent = 'Storing OS components...';
+            await window.WebOSFileSystem.writeFile('A:/SourOS/localstorage-driver.js', driverContent);
+            console.log('Stored localstorage-driver.js in A:/SourOS');
+
+            installMessage.textContent = 'Proceeding with system file creation...'; // Update message for next steps
+
             // 1. Create A:/system directory (and A:/ if it doesn't exist conceptually)
             // Our FileSystem API creates parent paths implicitly if simple, or use createDirectory.
             await window.WebOSFileSystem.createDirectory('A:/system');

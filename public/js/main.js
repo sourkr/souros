@@ -32,8 +32,23 @@ async function checkOSInstallationAndRedirect() {
     let highestZIndex = 100; // For managing window stacking
     let openWindows = {}; // To track open windows and prevent duplicates
 
+    const mockFileSystem = {
+        'root': {
+            type: 'folder',
+            children: {
+                'Documents': { type: 'folder', children: {
+                    'Report.docx': { type: 'file', content: 'This is a Word document.' },
+                    'Presentation.pptx': { type: 'file', content: 'This is a PowerPoint presentation.' }
+                }},
+                'Pictures': { type: 'folder', children: {
+                    'Vacation.jpg': { type: 'file', content: 'Image data' },
+                    'Family.png': { type: 'file', content: 'Image data' }
+                }},
+                'README.txt': { type: 'file', content: 'Welcome to WebOS!' }
+            }
+        }
+    };
     // Note: currentPath will be managed per window instance via dataset attributes.
-    // mockFileSystem has been removed as we are now using WebOSFileSystem.
 
     // --- Sample App Definitions ---
     const apps = [
@@ -306,18 +321,6 @@ async function checkOSInstallationAndRedirect() {
                     </script>
                 </div>
             `
-        },
-        {
-            id: 'terminal',
-            name: 'Terminal',
-            icon: 'assets/icons/puzzle-piece.svg', // Placeholder icon, consider changing
-            content: `
-                <div class="terminal-output" style="height: calc(100% - 30px); overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; background-color: #1e1e1e; color: #d4d4d4; padding: 5px;"></div>
-                <div class="terminal-input-line" style="display: flex; height: 25px; background-color: #1e1e1e; border-top: 1px solid #333;">
-                    <span class="terminal-prompt" style="color: #569cd6; padding: 2px 5px;"></span>
-                    <input type="text" class="terminal-input" style="flex-grow: 1; background-color: transparent; color: #d4d4d4; border: none; outline: none; font-family: monospace; padding: 2px 5px;">
-                </div>
-            `
         }
     ];
 
@@ -406,15 +409,13 @@ async function checkOSInstallationAndRedirect() {
         });
 
         if (app.id === 'fileExplorer') {
-            windowDiv.dataset.currentPath = ""; // Initial path signifies drive listing view
+            windowDiv.dataset.currentPath = JSON.stringify(['root']); // Initial path for this window
             const feMainArea = windowDiv.querySelector('.file-explorer-main-area');
             if (feMainArea) {
-                 renderFileExplorer(windowDiv, windowDiv.dataset.currentPath);
+                 renderFileExplorer(windowDiv, JSON.parse(windowDiv.dataset.currentPath));
             } else {
                 console.error("File Explorer main area not found on window creation.");
             }
-        } else if (app.id === 'terminal') {
-            initializeTerminal(windowDiv);
         }
     }
 
@@ -626,109 +627,86 @@ async function checkOSInstallationAndRedirect() {
             return;
         }
 
-        appWindow.dataset.currentPath = currentPathString; // Update current path in DOM
+        let currentLevelData = mockFileSystem;
+        let validPath = true;
+        for (const part of pathArray) {
+            if (currentLevelData[part] && currentLevelData[part].type === 'folder') {
+                currentLevelData = currentLevelData[part].children;
+            } else {
+                // Path part not found or not a folder, try to recover or show error
+                console.warn('Invalid path segment:', part, 'in', pathArray.join('/'));
+                validPath = false;
+                break;
+            }
+        }
+
+        if (!validPath || typeof currentLevelData !== 'object') {
+            // Attempt to reset to root if path became invalid
+            // Or if currentLevelData is not an object (e.g. points to a file's children)
+            pathArray = ['root'];
+            appWindow.dataset.currentPath = JSON.stringify(pathArray);
+            currentLevelData = mockFileSystem.root.children;
+            console.warn('Path was invalid or led to non-folder, reset to root. Displaying root children.');
+        }
+
 
         let html = '<div class="fe-nav" style="padding: 5px; background: #eee; border-bottom: 1px solid #ccc;">';
-        let pathDisplayName = "";
-        let items = []; // To store {name, type, fullPath (for files/folders)} or {name, type (drive), driveLetter}
-
-        if (currentPathString === "") { // Drive listing view
-            pathDisplayName = "Drives";
-            html += `<button class="fe-up-btn" disabled>Up</button> `; // Disabled at drive list
-            const drives = await WebOSFileSystem.getDrives(); // Assuming this returns an object like { A: { letter: 'A:', type: 'localStorage' }, ... }
-            for (const driveKey in drives) {
-                items.push({ name: `${drives[driveKey].letter} (${drives[driveKey].type})`, type: 'drive', driveLetter: drives[driveKey].letter });
-            }
-        } else { // Directory listing view
-            pathDisplayName = currentPathString;
-            html += `<button class="fe-up-btn">Up</button> `;
-            try {
-                const directoryContents = await WebOSFileSystem.listDirectory(currentPathString);
-                directoryContents.forEach(item => {
-                    items.push({
-                        name: item.name,
-                        type: item.type, // 'file' or 'directory'
-                        // Construct full path for easy access, ensuring no double slashes if currentPathString ends with /
-                        fullPath: (currentPathString.endsWith('/') ? currentPathString : currentPathString + '/') + item.name
-                    });
-                });
-            } catch (error) {
-                console.error(`Error listing directory ${currentPathString}:`, error);
-                items.push({ name: `Error: ${error.message}`, type: 'error' });
-                // Optionally, navigate up or to drive list on error
-                // currentPathString = ""; // Go to drive list
-                // pathDisplayName = "Drives (Error occurred)";
-                // html = html.replace('<button class="fe-up-btn">Up</button>', '<button class="fe-up-btn" disabled>Up</button>');
-            }
-        }
-
-        html += `<span>Path: ${pathDisplayName}</span></div>`;
+        html += `<button class="fe-up-btn" ${pathArray.length <= 1 ? 'disabled' : ''}>Up</button> `;
+        html += `<span>Path: /${pathArray.join('/')}</span>`; // Display full path from root
+        html += '</div>';
         html += '<ul class="fe-item-list" style="list-style: none; padding: 5px; margin: 0; height: calc(100% - 30px); overflow-y: auto;">';
 
-        if (items.length === 0 && currentPathString !== "") {
-            html += '<li style="padding: 3px; color: #777;"><em>Empty directory</em></li>';
-        } else if (items.length === 0 && currentPathString === "") {
-             html += '<li style="padding: 3px; color: #777;"><em>No drives available.</em></li>';
-        }
-
-
-        items.forEach(item => {
-            const icon = item.type === 'folder' || item.type === 'directory' ? '&#128193;' : (item.type === 'drive' ? '&#128187;' : '&#128196;'); // Folder, Drive, File icons
-            html += `<li class="fe-item" data-name="${item.name}" data-type="${item.type}" ${item.driveLetter ? `data-drive-letter="${item.driveLetter}"` : ''} ${item.fullPath ? `data-full-path="${item.fullPath}"` : ''} style="padding: 3px; cursor: pointer; user-select:none;">`;
-            html += `<span class="fe-item-icon">${icon}</span> ${item.name}`;
+        for (const itemName in currentLevelData) {
+            const item = currentLevelData[itemName];
+            const icon = item.type === 'folder' ? '&#128193;' : '&#128196;'; // Folder and File icons
+            html += `<li class="fe-item" data-name="${itemName}" data-type="${item.type}" style="padding: 3px; cursor: pointer; user-select:none;">`;
+            html += `<span class="fe-item-icon">${icon}</span> ${itemName}`;
             html += '</li>';
-        });
+        }
         html += '</ul>';
         targetDiv.innerHTML = html;
 
         // Add event listeners
         appWindow.querySelectorAll('.fe-item').forEach(itemElem => {
-            itemElem.addEventListener('click', async () => {
+            itemElem.addEventListener('click', () => {
                 const itemName = itemElem.getAttribute('data-name');
                 const itemType = itemElem.getAttribute('data-type');
-                const currentPath = appWindow.dataset.currentPath; // Get current path from dataset
+                // Get current path from window dataset
+                let currentWindowPath = JSON.parse(appWindow.dataset.currentPath);
 
-                if (itemType === 'drive') {
-                    const driveLetter = itemElem.getAttribute('data-drive-letter');
-                    renderFileExplorer(appWindow, driveLetter + '/'); // Navigate to root of the drive
-                } else if (itemType === 'folder' || itemType === 'directory') {
-                    const folderPath = itemElem.getAttribute('data-full-path');
-                    renderFileExplorer(appWindow, folderPath + '/'); // Ensure trailing slash for directories
-                } else if (itemType === 'file') {
-                    const filePath = itemElem.getAttribute('data-full-path');
-                    try {
-                        const content = await WebOSFileSystem.readFile(filePath);
-                        // For Drive C, content might be JSON or plain text.
-                        let displayContent = content;
-                        if (typeof content === 'object') { // For JSON objects from Drive C files like quota.txt
-                            displayContent = JSON.stringify(content, null, 2);
+                if (itemType === 'folder') {
+                    const newPath = [...currentWindowPath, itemName];
+                    appWindow.dataset.currentPath = JSON.stringify(newPath);
+                    renderFileExplorer(appWindow, newPath);
+                } else {
+                    // Re-evaluate currentLevel for file content lookup based on currentWindowPath
+                    let fileParentLevel = mockFileSystem;
+                    for(const part of currentWindowPath) {
+                        if(fileParentLevel[part] && fileParentLevel[part].type === 'folder') {
+                            fileParentLevel = fileParentLevel[part].children;
+                        } else {
+                            // Should not happen if path is correct
+                            break;
                         }
-                        alert(`File: ${itemName}\n\n${displayContent}`);
-                    } catch (error) {
-                        console.error(`Error reading file ${filePath}:`, error);
-                        alert(`Error reading file ${itemName}: ${error.message}`);
+                    }
+                    if (fileParentLevel[itemName] && fileParentLevel[itemName].content) {
+                        alert(`File clicked: ${itemName}\nContent: ${fileParentLevel[itemName].content}`);
+                    } else {
+                         alert(`File clicked: ${itemName}\nContent: Not available or error in path.`);
                     }
                 }
             });
         });
 
         const upButton = appWindow.querySelector('.fe-up-btn');
-        if (upButton && !upButton.disabled) {
+        if (upButton) {
             upButton.addEventListener('click', () => {
-                let currentPath = appWindow.dataset.currentPath;
-                let newPath = ""; // Default to drive listing
-                if (currentPath.endsWith('/')) { // Remove trailing slash for processing
-                    currentPath = currentPath.slice(0, -1);
+                let currentWindowPath = JSON.parse(appWindow.dataset.currentPath);
+                if (currentWindowPath.length > 1) {
+                    const newPath = currentWindowPath.slice(0, -1);
+                    appWindow.dataset.currentPath = JSON.stringify(newPath);
+                    renderFileExplorer(appWindow, newPath);
                 }
-
-                if (currentPath.includes('/')) { // If it's a path like "A:/folder" or "A:/folder/sub"
-                    newPath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-                     // If newPath becomes "A:/", it's fine. If "A:", it should become "A:/" for consistency (or handled by listDirectory)
-                } else if (currentPath.endsWith(':')) { // If it's a drive root like "A:"
-                    newPath = ""; // Go to drive listing
-                }
-                // If currentPath is already "", up button should be disabled, so no specific handling needed here.
-                renderFileExplorer(appWindow, newPath);
             });
         }
     }

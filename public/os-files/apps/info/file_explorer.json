@@ -1,5 +1,5 @@
 {
   "name": "File Explorer",
-  "executable": "A:/apps/file_explorer_executable.js",
-  "icon": "A:/assets/icons/folder-open.svg"
+  "executable": "A:/apps/file_explorer.js",
+  "icon": "A:/apps/icons/folder-open.svg"
 }

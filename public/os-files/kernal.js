@@ -29,6 +29,10 @@ window.os = {
             return data.drive.read(data.fd)
         },
 
+        readdir(fd) {
+            return this.read(fd).split('\n')
+        },
+
         close(fd) {
             const data = this.fdMap.get(fd)
 
@@ -40,7 +44,11 @@ window.os = {
 
     kernel: {
         eval(code) {
-            eval(code)
+            try {
+                eval(code)
+            } catch (err) {
+                console.log(err, path)
+            }
         },
 
         exec(path) {
@@ -49,7 +57,7 @@ window.os = {
             try {
                 this.eval(os.fs.read(file))
             } catch (err) {
-                console.error(err)
+                console.log(err, path)
             }
 
             os.fs.close(file)

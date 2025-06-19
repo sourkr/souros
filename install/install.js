@@ -5,6 +5,7 @@ const drive = createDrive()
 
 async function installOS() {
     await updateDir('/api/os-files-content/', '/')
+    console.log(drive);
     localStorage.setItem('drive', JSON.stringify(drive))
 }
 
@@ -16,6 +17,8 @@ async function updateDir(webDir, sysDir) {
     // drive.table[dirPath].size = dirData.length
 
     for(let entry of list) {
+        console.log(sysDir + entry.name);
+        
         if (entry.type == 'file') {
             drive.table[`${sysDir}${entry.name}`] = {
                 type: 'file',
@@ -33,7 +36,7 @@ async function updateDir(webDir, sysDir) {
                 accessed: time,
             }
 
-            updateDir(`${webDir}/${entry.name}`, `${sysDir}${entry.name}/`)
+            await updateDir(`${webDir}/${entry.name}`, `${sysDir}${entry.name}/`)
 
             // localStorage.setItem(`${sysDir}${entry.name}`, '')
         }

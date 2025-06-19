@@ -15,7 +15,7 @@ async function loadApplications() {
     let dirFd;
     try {
       console.log(`Attempting to open directory: ${infoPath}`);
-      dirFd = await window.os.fs.open(infoPath);
+      dirFd = await window.os.fs.open(infoPath, 'read');
       console.log(`Directory opened, fd: ${dirFd}`);
       const entries = await window.os.fs.readdir(dirFd);
       console.log(`Directory entries: ${entries.join(', ')}`);
@@ -26,7 +26,7 @@ async function loadApplications() {
           let fileFd;
           try {
             console.log(`Attempting to open file: ${fullPathToJsonFile}`);
-            fileFd = await window.os.fs.open(fullPathToJsonFile);
+            fileFd = await window.os.fs.open(fullPathToJsonFile, 'read');
             console.log(`File opened: ${fullPathToJsonFile}, fd: ${fileFd}`);
             const content = await window.os.fs.read(fileFd); // Assuming read returns string content
             console.log(`File content for ${fileName}: ${content.substring(0, 100)}...`); // Log snippet

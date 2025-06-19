@@ -1,9 +1,11 @@
+console.log('Running A: driver');
+
 let drive;
 const fds = new Map();
 let fdIndex = 0;
 const closedFds = [];
 
-load(); // Load drive data on script initialization
+load();
 
 os.drives.set('A:', {
     driveSize() {
@@ -15,6 +17,7 @@ os.drives.set('A:', {
         let fd = -1;
 
         if (!(fpath in drive.table)) {
+            console.error(`dont exits ${path}`);
             return -1;
         }
 
@@ -50,11 +53,14 @@ os.drives.set('A:', {
             console.warn("read: Invalid FD (-1)");
             return null;
         }
+
         const entryInfo = fds.get(fd);
+
         if (!entryInfo) {
             console.warn(`read: FD not found '${fd}'`);
             return null;
         }
+        
         if (!entryInfo.flags.includes('read')) {
             console.warn(`read: File descriptor '${fd}' does not have read permission.`);
             return null;
@@ -375,3 +381,5 @@ function save() {
         // Consider implications: future operations might use stale data if save fails.
     }
 }
+
+console.log('DONE A: driver');

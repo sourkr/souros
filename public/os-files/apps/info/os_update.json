@@ -1,0 +1,5 @@
+{
+  "name": "OS Update",
+  "executable": "A:/apps/os_update.js",
+  "icon": "A:/apps/icons/os_update.svg"
+}

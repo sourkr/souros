@@ -35,5 +35,5 @@ window.addEventListener('DOMContentLoaded', () => {
     // This might run before all async operations in driver.test.js are set up
     // It's better to call TestRunner.run() at the end of driver.test.js or after a delay.
     // For now, let's keep it simple and assume tests can be run on DOMContentLoaded.
-    // TestRunner.run(); // Will be called from driver.test.js
+    TestRunner.run(); // Will be called from driver.test.js
 });

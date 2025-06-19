@@ -72,20 +72,26 @@
         driveSize: async function() {
             try {
                 const estimate = await navigator.storage.estimate();
-                return {
-                    total: estimate.quota,
-                    used: estimate.usage,
-                    free: estimate.quota - estimate.usage
-                };
+                return estimate.quota !== undefined ? estimate.quota : -1;
             } catch (e) {
                 console.error("browserStorageDriver: Error estimating storage quota", e);
-                return { total: -1, used: -1, free: -1 }; // Indicate error or unknown
+                return -1; // Indicate error or unknown
             }
         },
 
-        open: async function(path) { // Removed ...flags
+        open: async function(path, ...flags) {
             const fPath = this._formatPath(path);
             const urlPath = formatPathToUrl(fPath); // Path for Cache API
+
+            let effectiveFlags = flags && flags.length > 0 ? flags : ['read'];
+
+            if (effectiveFlags.includes('write') || effectiveFlags.includes('append') || effectiveFlags.length > 1) {
+                console.warn(`browserStorageDriver.open: File '${fPath}' opened with flags '${effectiveFlags.join(', ')}'. This driver has simplified flag support; actual behavior relies on 'read'/'write' method calls.`);
+            }
+            if (!effectiveFlags.includes('read') && !effectiveFlags.includes('write') && !effectiveFlags.includes('append')) {
+                console.warn(`browserStorageDriver.open: File '${fPath}' opened with flags '${effectiveFlags.join(', ')}' which do not include read, write, or append. Defaulting to 'read' behavior.`);
+                effectiveFlags.push('read');
+            }
 
             const cache = await caches.open(getCacheName());
             const match = await cache.match(urlPath);
@@ -93,19 +99,23 @@
             let meta = this._getMetadata(fPath);
 
             if (!match && !meta) {
-                console.warn(`browserStorageDriver.open: Path '${fPath}' not found (no cache entry or metadata).`);
+                 if (effectiveFlags.includes('create') || effectiveFlags.includes('truncate')) {
+                     console.warn(`browserStorageDriver.open: Path not found '${fPath}', but 'create' or 'truncate' flag present. Use dedicated 'create()' method to make new files.`);
+                 } else {
+                    console.warn(`browserStorageDriver.open: Path '${fPath}' not found (no cache entry or metadata).`);
+                 }
                 return -1;
             }
 
-            if (!meta && match) {
+            if (!meta && match) { // File exists in cache, but not in metadata (e.g. after metadata clear)
                 const responseBody = await match.text();
                 meta = { type: 'file', size: responseBody.length, created: Date.now(), modified: Date.now(), accessed: Date.now() };
                 this._setMetadata(fPath, meta);
                 console.warn(`browserStorageDriver.open: Reconstructed basic metadata for '${fPath}' from cache.`);
-            } else if (meta && !match && meta.type === 'file') {
-                 console.warn(`browserStorageDriver.open: Metadata for file '${fPath}' exists, but no cache entry. File might be corrupted or partially deleted.`);
+            } else if (meta && !match && meta.type === 'file') { // Metadata exists, but no cache entry
+                 console.warn(`browserStorageDriver.open: Metadata for file '${fPath}' exists, but no cache entry. File might be corrupted or was not properly saved to cache initially.`);
             }
-
+            // If it's a directory (meta.type === 'dir'), 'match' might be undefined if it's not a cache-stored entity, which is fine.
 
             let fdId;
             if (closedFds.length > 0) {
@@ -113,7 +123,9 @@
             } else {
                 fdId = fdCounter++;
             }
-            fds.set(fdId, { path: fPath, metadata: meta, urlPath: urlPath }); // Removed flags
+            // For directories, urlPath might not be directly used by cache later unless we store dir listings in cache too.
+            // For now, metadata 'content' field handles directory listings.
+            fds.set(fdId, { path: fPath, metadata: meta, urlPath: urlPath, flags: effectiveFlags });
             return fdId;
         },
 
@@ -129,14 +141,24 @@
         stat: function(fd) {
             const entry = fds.get(fd);
             if (!entry) return null;
-            return entry.metadata ? { ...entry.metadata } : null;
+            // Return a copy of metadata, and add flags to it if needed for stat in future
+            return entry.metadata ? { ...entry.metadata /*, flags: entry.flags */ } : null;
         },
 
         read: async function(fd) {
             const entry = fds.get(fd);
-            if (!entry || !entry.metadata) return null;
+            if (!entry || !entry.metadata) {
+                console.warn("browserStorageDriver.read: FD not found or no metadata.");
+                return null;
+            }
+
+            if (!entry.flags || !entry.flags.includes('read')) {
+                console.warn(`browserStorageDriver.read: File descriptor for '${entry.path}' does not have 'read' flag. Flags: ${entry.flags ? entry.flags.join(',') : 'undefined'}`);
+                return null;
+            }
 
             if (entry.metadata.type === 'dir') {
+                // For directories, the 'content' in metadata is the comma-separated list of children.
                 return entry.metadata.content || "";
             }
 
@@ -161,9 +183,24 @@
 
         write: async function(fd, data) {
             const entry = fds.get(fd);
-            if (!entry || !entry.metadata) return -1;
+            if (!entry || !entry.metadata) {
+                console.warn("browserStorageDriver.write: FD not found or no metadata.");
+                return -1;
+            }
+
+            if (!entry.flags || (!entry.flags.includes('write') && !entry.flags.includes('append'))) {
+                console.warn(`browserStorageDriver.write: File descriptor for '${entry.path}' does not have 'write' or 'append' flag. Flags: ${entry.flags ? entry.flags.join(',') : 'undefined'}`);
+                return -1;
+            }
+
+            // Note: 'append' flag isn't fully implemented here; write overwrites.
+            // True append would require reading existing content first. This matches simple write behavior.
+            if (entry.flags.includes('append')) {
+                 console.warn(`browserStorageDriver.write: 'append' flag is present, but current implementation overwrites. For true append, read-modify-write is needed.`);
+            }
 
             if (entry.metadata.type === 'dir') {
+                // Writing to a directory's FD usually means updating its listing.
                 entry.metadata.content = data; // data is comma-separated child names
                 entry.metadata.modified = Date.now();
                 this._setMetadata(entry.path, entry.metadata);
@@ -319,25 +356,14 @@
         }
     };
 
-    window.BrowserStorageDriverModule = {
-        driver: browserStorageDriver,
-        register: function(driveLetterToUse = 'C') {
-            driveLetterForCache = driveLetterToUse.toUpperCase();
-            initializeRootMetadata(); // Ensure root is there for the specific drive letter cache
-            if (window.os && window.os.drives) {
-                if (window.FileSystem) {
-                    // We register the raw driver object, FileSystem class will wrap it when Drives.addDrive is called
-                    window.os.drives.set(driveLetterForCache, browserStorageDriver);
-                    console.log(`BrowserStorageDriver (raw) registered for Drive ${driveLetterForCache}. Kernal should use Drives.addDrive.`);
-                } else {
-                     window.os.drives.set(driveLetterForCache, browserStorageDriver);
-                     console.warn(`BrowserStorageDriver registered raw for Drive ${driveLetterForCache}: (FileSystem class not found at registration time)`);
-                }
-            } else {
-                console.error("BrowserStorageDriver: window.os.drives not found. Cannot register.");
-            }
-        }
-    };
-    console.log("browser-storage-driver.js loaded. Call BrowserStorageDriverModule.register('DRIVE_LETTER') to activate.");
-
+    // Direct registration
+    if (window.os && window.os.drives) {
+        // initializeRootMetadata() was already called at the start of this script.
+        // driveLetterForCache is already 'C' by default, which getCacheName() will use.
+        // And metadataStore uses '/' as key, which is fine for a single drive instance.
+        window.os.drives.set('C:', browserStorageDriver);
+        console.log(`BrowserStorageDriver registered directly for Drive C:.`);
+    } else {
+        console.error("BrowserStorageDriver: window.os.drives not found. Cannot register directly.");
+    }
 })();

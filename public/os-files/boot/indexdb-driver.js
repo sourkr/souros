@@ -171,13 +171,36 @@
 
         driveSize: () => -1, // IndexedDB doesn't have a fixed size in this context
 
-        open: async function(path) { // Removed ...flags parameter
+        open: async function(path, ...flags) {
             await _initializeRootIfNeeded();
             const fPath = _formatPath(path);
+
+            let effectiveFlags = flags && flags.length > 0 ? flags : ['read'];
+
+            // Warning for write flags or complex flag usage
+            if (effectiveFlags.includes('write') || effectiveFlags.includes('append') || effectiveFlags.length > 1) {
+                console.warn(`indexdb-driver.open: File '${fPath}' opened with flags '${effectiveFlags.join(', ')}'. IndexedDB driver has simplified flag support; primarily treats files as readable/writable based on method calls (read/write), not all open flags are strictly enforced or fully implemented for all edge cases.`);
+            }
+            if (!effectiveFlags.includes('read') && !effectiveFlags.includes('write') && !effectiveFlags.includes('append')) {
+                 // If no standard read/write/append, default to read for safety in this driver.
+                console.warn(`indexdb-driver.open: File '${fPath}' opened with flags '${effectiveFlags.join(', ')}' which do not include read, write, or append. Defaulting to 'read' behavior for safety.`);
+                effectiveFlags.push('read'); // Ensure it's at least readable
+            }
+
+
             try {
                 const metadata = await getRecord(METADATA_STORE_NAME, fPath);
                 if (!metadata) {
-                    console.warn(`open: Path not found '${fPath}'`);
+                    // If trying to write/create, and file doesn't exist, this is handled by 'create' or 'mkdir'.
+                    // 'open' itself doesn't create files.
+                    // However, if 'write' or 'append' flag is present, one might expect creation.
+                    // For now, strictly adhere to "metadata must exist for open".
+                    // This aligns with how 'create' and 'mkdir' are separate.
+                    if (effectiveFlags.includes('create') || effectiveFlags.includes('truncate')) {
+                         console.warn(`indexdb-driver.open: Path not found '${fPath}', but 'create' or 'truncate' flag present. Use dedicated 'create()' method to make new files.`);
+                    } else {
+                        console.warn(`indexdb-driver.open: Path not found '${fPath}'`);
+                    }
                     return -1;
                 }
 
@@ -187,10 +210,10 @@
                 } else {
                     fd = fdCounter++;
                 }
-                fds.set(fd, { path: fPath, metadata: metadata }); // Removed flags from fds
+                fds.set(fd, { path: fPath, metadata: metadata, flags: effectiveFlags });
                 return fd;
             } catch (error) {
-                console.error(`open: Error opening path '${fPath}':`, error);
+                console.error(`indexdb-driver.open: Error opening path '${fPath}':`, error);
                 return -1;
             }
         },
@@ -214,8 +237,10 @@
         read: async function(fd) {
             const entry = fds.get(fd);
             if (!entry) { console.warn("read: FD not found"); return null; }
-            // if (!entry.flags.includes('read')) { console.warn("read: No read flag"); return null; }
-
+            if (!entry.flags || !entry.flags.includes('read')) {
+                console.warn(`indexdb-driver.read: File descriptor for '${entry.path}' does not have 'read' flag. Flags: ${entry.flags ? entry.flags.join(',') : 'undefined'}`);
+                return null;
+            }
 
             try {
                 const contentRecord = await getRecord(CONTENTS_STORE_NAME, entry.path);
@@ -242,7 +267,10 @@
         write: async function(fd, data) {
             const entry = fds.get(fd);
             if (!entry) { console.warn("write: FD not found"); return -1; }
-            // if (!entry.flags.includes('write')) { console.warn("write: No write flag"); return -1; }
+            if (!entry.flags || (!entry.flags.includes('write') && !entry.flags.includes('append'))) {
+                 console.warn(`indexdb-driver.write: File descriptor for '${entry.path}' does not have 'write' or 'append' flag. Flags: ${entry.flags ? entry.flags.join(',') : 'undefined'}`);
+                return -1;
+            }
 
             try {
                 await putRecord(CONTENTS_STORE_NAME, { path: entry.path, content: data });

@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs').promises; // Import the promises version of fs for async/await
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -7,6 +8,8 @@ const PORT = process.env.PORT || 3000;
 // Define paths for static assets
 const publicPath = path.join(__dirname, '..', 'public');
 const installPath = path.join(__dirname, '..', 'install');
+// Define the root directory for OS files that will be listed or served via the API
+const osFilesRoot = path.join(publicPath, 'os-files'); // This points to public/os-files/
 
 // Middleware to serve static files
 // Serve install directory at /install
@@ -28,7 +31,82 @@ app.get('/install/', (req, res) => {
     res.sendFile(path.join(installPath, 'index.html'));
 });
 
+/**
+ * API endpoint to either list the contents of a directory or send a file's content
+ * from within the 'public/os-files/' directory.
+ *
+ * This route handles dynamic paths. For example:
+ * - GET /api/os-files-content/  -> Lists the root of os-files
+ * - GET /api/os-files-content/documents -> Lists the 'documents' subdirectory
+ * - GET /api/os-files-content/documents/report.txt -> Sends the content of 'report.txt'
+ *
+ * @route GET /api/os-files-content/*
+ * @returns {json|file} An array of objects for a directory, or the raw file content.
+ */
+app.get('/api/os-files-content*', async (req, res) => {
+    // Extract the requested path from the URL.
+    // We remove the '/api/os-files-content' prefix to get the relative path.
+    const requestedPath = req.path.substring('/api/os-files-content'.length) || '/';
 
+    const targetPath = path.join(osFilesRoot, path.normalize(requestedPath));
+
+    // CRITICAL SECURITY CHECK: Ensure the resolved targetPath remains within the intended osFilesRoot.
+    // This prevents requests like '/api/os-files-content/../../../etc/passwd'
+    if (!targetPath.startsWith(osFilesRoot)) {
+        return res.status(400).json({ error: 'Invalid path: Access denied.' });
+    }
+
+    try {
+        // Get stats to determine if the path is a file or a directory
+        const stats = await fs.stat(targetPath);
+
+        if (stats.isDirectory()) {
+            // If it's a directory, list its contents
+            const entries = await fs.readdir(targetPath);
+            const result = [];
+
+            for (const entry of entries) {
+                const entryPath = path.join(targetPath, entry);
+                try {
+                    const entryStats = await fs.stat(entryPath);
+                    result.push({
+                        name: entry,
+                        type: entryStats.isDirectory() ? 'dir' : 'file'
+                    });
+                } catch (innerError) {
+                    console.warn(`Could not get stats for "${entryPath}", skipping. Error: ${innerError.message}`);
+                }
+            }
+            res.json(result);
+
+        } else if (stats.isFile()) {
+            // If it's a file, send its contents directly
+            res.sendFile(targetPath);
+
+        } else {
+            // Handle other file system types (like symlinks) if necessary,
+            // or return an error for unsupported types.
+            res.status(400).json({ error: 'Path points to an unsupported resource type.' });
+        }
+
+    } catch (error) {
+        // Handle specific file system errors
+        if (error.code === 'ENOENT') {
+            // "Entry Not Found" - the requested file or directory does not exist
+            return res.status(404).json({ error: `File or directory not found: "${requestedPath}"` });
+        } else if (error.code === 'EACCES') {
+            // "Permission Denied" - server does not have read access
+            return res.status(403).json({ error: `Permission denied to access: "${requestedPath}"` });
+        } else {
+            // Catch any other unexpected errors
+            console.error(`Error processing request for "${requestedPath}":`, error);
+            res.status(500).json({ error: 'Server error processing the request.' });
+        }
+    }
+});
+
+
+// Start the Express server
 app.listen(PORT, () => {
     console.log(`Web Desktop server running on http://localhost:${PORT}`);
     console.log(`Installation page: http://localhost:${PORT}/install/`);

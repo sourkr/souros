@@ -50,11 +50,31 @@ window.os = {
         },
 
         close(fd) {
-            const data = this.fdMap.get(fd)
+            const fdInfo = this.fdMap.get(fd); // 'this' refers to os.fs
 
-            data.drive.close(data.fd)
-            this.fdMap.delete(fd)
-            this.closedFd.push(fd)
+            if (!fdInfo) {
+                console.warn(`os.fs.close: File descriptor ${fd} not found in fdMap. Already closed or invalid.`);
+                return -1; // Error code for invalid FD
+            }
+
+            // fdInfo.drive is the correct driver instance stored by os.fs.open
+            if (fdInfo.drive && typeof fdInfo.drive.close === 'function') {
+                const result = fdInfo.drive.close(fdInfo.fd); // Call the actual driver's close method
+
+                // Regardless of the driver's close result, we should clean up the global FD map
+                // if the driver's close was attempted. If driver.close indicates an error,
+                // the OS layer has still "closed" its global FD.
+                this.fdMap.delete(fd);
+                this.closedFd.push(fd); // Add to pool of reusable FDs
+
+                return result; // Propagate driver's result (e.g., 0 for success, -1 for error)
+            } else {
+                console.error(`os.fs.close: Driver instance or close method not found for FD ${fd} in fdInfo. This indicates a corrupted fdMap entry.`);
+                // Still remove the corrupted entry from fdMap
+                this.fdMap.delete(fd);
+                this.closedFd.push(fd);
+                return -1; // Error
+            }
         }
     },
 
@@ -85,7 +105,23 @@ window.os = {
 async function initializeCoreSystemsAndDrives() {
     console.log("Kernel: Initializing core systems and drives...");
 
-    // Setup for Drive A (localStorage-driver)
+    try {
+        const idbDriverScript = localStorage.getItem('/indexdb-driver.js'); // Path assumption
+        if (idbDriverScript) {
+            // Use os.kernel.eval for consistency if it provides better error context, though direct eval is fine here.
+            os.kernel.eval(idbDriverScript);
+            console.log('Kernel: indexdb-driver.js (from localStorage) evaluated.');
+        } else {
+            // This is a critical failure if the drive is expected to be configurable.
+            throw new Error('indexdb-driver.js not found in localStorage.');
+        }
+    } catch (e) {
+        console.error('Kernel: Critical error loading or evaluating /indexdb-driver.js. IndexedDB drive will be unavailable.', e);
+        alert('Critical Boot Error: Could not load /indexdb-driver.js. IndexedDB drive will be unavailable.');
+        // The rest of the function will proceed, but the check for
+        // window.FileSystemDrivers.IndexDBRevised will fail, preventing its use.
+    }
+
     try {
         const localStorageDriverCode = localStorage.getItem('/localstorage-driver.js');
         if (localStorageDriverCode) {
@@ -101,6 +137,26 @@ async function initializeCoreSystemsAndDrives() {
         }
     } catch (e) {
         console.error('Kernel: Error loading localStorage-driver for Drive A:', e);
+    }
+  
+    try {
+        const browserStorageDriverScript = localStorage.getItem('/browser-storage-driver.js'); // Path assumption
+        if (browserStorageDriverScript) {
+            os.kernel.eval(browserStorageDriverScript); // Use os.kernel.eval for consistency
+            console.log('Kernel: browser-storage-driver.js (from localStorage) evaluated.');
+            // The driver self-registers if window.os and window.os.drives exist.
+            // window.os.drives is initialized when window.os is defined.
+            if (os.drives.has('C:')) {
+                 console.log('Kernel: Drive C: (BrowserStorage) registered.');
+            } else {
+                console.warn('Kernel: Drive C: (BrowserStorage) did not self-register as expected.');
+            }
+        } else {
+            // This might not be critical enough to throw/alert, but good to note.
+            console.warn('Kernel: browser-storage-driver.js not found in localStorage. Drive C may be unavailable.');
+        }
+    } catch (e) {
+        console.error('Kernel: Error loading or evaluating /browser-storage-driver.js. Drive C may be unavailable.', e);
     }
 
     // Dynamic setup for IndexedDB Drive (e.g., B:, D:, E:, F:)
@@ -174,9 +230,6 @@ async function initializeCoreSystemsAndDrives() {
         }
     }
 
-
-    // Proceed with booting from A:/boot/boot.txt
-    // This part assumes Drive A (LocalStorage) was successfully mounted by initializeCoreSystemsAndDrives
     if (!os.drives.has('A:')) {
         console.error("Kernel: Drive A: not available. Cannot read /boot/boot.txt. System halt.");
         alert("CRITICAL ERROR: Drive A: (localStorage) failed to load. OS cannot boot.");

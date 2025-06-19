@@ -12,6 +12,8 @@ window.os = {
             const drive = os.drives.get(driveName)
             const driveFd = drive.open(path.slice(2), flags)
 
+            if (driveFd == -1) return -1
+
             let fd = -1
 
             if (this.closedFd.length) {
@@ -29,8 +31,22 @@ window.os = {
             return data.drive.read(data.fd)
         },
 
+        write(fd, str) {
+            const data = this.fdMap.get(fd)
+            data.drive.write(data.fd, str)
+        },
+
         readdir(fd) {
-            return this.read(fd).split('\n')
+            const data = this.fdMap.get(fd)
+            return data.drive.readdir(data.fd)
+        },
+
+        mkdir(path) {
+            const driveName = path.slice(0, 2)
+            if (!os.drives.has(driveName)) return
+
+            const drive = os.drives.get(driveName)
+            drive.mkdir(path.slice(2))
         },
 
         close(fd) {

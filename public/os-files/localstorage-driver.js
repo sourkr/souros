@@ -17,8 +17,8 @@ os.drives.set('A:', {
         let fd = -1;
 
         if (!(fpath in drive.table)) {
-            console.error(`dont exits ${path}`);
-            return -1;
+            if (!flags.includes('write')) return -1;
+            this.create(path)
         }
 
         if (closedFds.length) {
@@ -118,7 +118,7 @@ os.drives.set('A:', {
 
     readdir(fd) {
         const content = this.read(fd);
-        return content !== null ? content.split(',').filter(name => name.trim() !== '') : null;
+        return content !== null ? content.split('\n').filter(name => name.trim() !== '') : null;
     },
 
     mkdir(path) {
@@ -146,12 +146,12 @@ os.drives.set('A:', {
         }
 
         const pdata = this.read(pfd);
-        const currentParentEntries = pdata !== null ? pdata.split(',').filter(name => name.trim() !== '') : [];
+        const currentParentEntries = pdata !== null ? pdata.split('\n').filter(name => name.trim() !== '') : [];
 
         currentParentEntries.push(fname(fpath));
 
         if (ppath !== '/') { // Only write to parent if it's not root (root content not stored this way)
-            const writeResult = this.write(pfd, currentParentEntries.join(','));
+            const writeResult = this.write(pfd, currentParentEntries.join('\n'));
             if (writeResult === -1) {
                 console.error(`mkdir: Failed to update parent directory listing for '${ppath}'`);
                 if (pfd !== -1) this.close(pfd);
@@ -211,12 +211,12 @@ os.drives.set('A:', {
         }
 
         const pdata = this.read(pfd);
-        const currentParentEntries = pdata !== null ? pdata.split(',').filter(name => name.trim() !== '') : [];
+        const currentParentEntries = pdata !== null ? pdata.split('\n').filter(name => name.trim() !== '') : [];
 
         currentParentEntries.push(fname(fpath));
 
         if (ppath !== '/') {
-                const writeResult = this.write(pfd, currentParentEntries.join(','));
+                const writeResult = this.write(pfd, currentParentEntries.join('\n'));
                 if (writeResult === -1) {
                 console.error(`create: Failed to update parent directory listing for '${ppath}'`);
                 if (pfd !== -1) this.close(pfd);
@@ -280,14 +280,14 @@ os.drives.set('A:', {
             }
 
             if (parentContent !== null) {
-                let parentEntries = parentContent.split(',').filter(name => name.trim() !== '');
+                let parentEntries = parentContent.split('\n').filter(name => name.trim() !== '');
                 const filename = fname(fpath);
                 const initialLength = parentEntries.length;
                 parentEntries = parentEntries.filter(entry => entry !== filename);
 
                 if (parentEntries.length !== initialLength) {
                     try {
-                        localStorage.setItem(ppath, parentEntries.join(','));
+                        localStorage.setItem(ppath, parentEntries.join('\n'));
                     } catch (e) {
                         console.error(`delete: Error updating parent directory content in localStorage for '${ppath}':`, e);
                         // FS is now inconsistent.

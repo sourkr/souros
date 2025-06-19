@@ -1,14 +1,12 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs').promises; // Import the promises version of fs for async/await
+const fs = require('fs').promises;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Define paths for static assets
 const publicPath = path.join(__dirname, '..', 'public');
 const installPath = path.join(__dirname, '..', 'install');
-// Define the root directory for OS files that will be listed or served via the API
 const osFilesRoot = path.join(publicPath, 'os-files'); // This points to public/os-files/
 
 // Middleware to serve static files
@@ -31,18 +29,6 @@ app.get('/install/', (req, res) => {
     res.sendFile(path.join(installPath, 'index.html'));
 });
 
-/**
- * API endpoint to either list the contents of a directory or send a file's content
- * from within the 'public/os-files/' directory.
- *
- * This route handles dynamic paths. For example:
- * - GET /api/os-files-content/  -> Lists the root of os-files
- * - GET /api/os-files-content/documents -> Lists the 'documents' subdirectory
- * - GET /api/os-files-content/documents/report.txt -> Sends the content of 'report.txt'
- *
- * @route GET /api/os-files-content/*
- * @returns {json|file} An array of objects for a directory, or the raw file content.
- */
 app.get('/api/os-files-content*', async (req, res) => {
     // Extract the requested path from the URL.
     // We remove the '/api/os-files-content' prefix to get the relative path.
@@ -105,10 +91,27 @@ app.get('/api/os-files-content*', async (req, res) => {
     }
 });
 
+// New endpoint to send the content of public/api/latest_os_version.txt
+app.get('/api/os-version', async (req, res) => {
+    const versionFilePath = path.join(publicPath, 'api', 'latest_os_version.txt');
+
+    try {
+        const content = await fs.readFile(versionFilePath, 'utf-8');
+        res.type('text/plain').send(content);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            res.status(404).json({ error: 'Version file not found.' });
+        } else {
+            console.error('Error reading OS version file:', error);
+            res.status(500).json({ error: 'Failed to read OS version file.' });
+        }
+    }
+});
 
 // Start the Express server
 app.listen(PORT, () => {
     console.log(`Web Desktop server running on http://localhost:${PORT}`);
     console.log(`Installation page: http://localhost:${PORT}/install/`);
     console.log(`Main application: http://localhost:${PORT}/`);
+    console.log(`OS Version endpoint: http://localhost:${PORT}/api/os-version`);
 });

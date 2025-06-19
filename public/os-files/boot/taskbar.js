@@ -1,9 +1,8 @@
-// Wait for the DOM to be fully loaded before trying to access #display
-document.addEventListener('DOMContentLoaded', async () => { // Made async
-  // Get the #display div (assuming it's created by desktop.js)
-  const displayDiv = document.getElementById('display');
+// Get the #display div (assuming it's created by desktop.js)
+const displayDiv = document.getElementById('display');
 
-  // --- Function to Load Application Data ---
+// --- Function to Load Application Data ---
+(async () => { // Made async IIFE
   async function loadApplications() {
     const infoPath = 'A:/apps/info/';
     let applications = [];
@@ -72,66 +71,6 @@ document.addEventListener('DOMContentLoaded', async () => { // Made async
   // --- End of Function to Load Application Data ---
 
   if (displayDiv) {
-    // --- Add Styles for Start Menu and its items ---
-    const styleElement = document.createElement('style');
-    styleElement.type = 'text/css';
-    styleElement.innerHTML = `
-      #startMenu {
-        /* Base styles are already applied inline, but can be refined here */
-        background-color: #f8f9fa !important; /* A lighter, cleaner background */
-        border: 1px solid #dee2e6 !important; /* Softer border color */
-        border-top-left-radius: 0 !important; /* Keep sharp edge with taskbar */
-        border-top-right-radius: 4px !important; /* Slightly rounded top-right corner */
-        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08) !important; /* Softer, more modern shadow */
-        color: #212529 !important; /* Darker text for better readability */
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important; /* Modern system font stack */
-      }
-
-      .start-menu-section h4 {
-        margin-top: 0 !important; /* Overriding inline style */
-        margin-bottom: 8px !important; /* Overriding inline style */
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
-        color: #495057 !important; /* Slightly muted header color */
-        border-bottom: 1px solid #e9ecef !important; /* Separator for section headers */
-        padding-bottom: 4px !important;
-      }
-
-      .start-menu-item {
-        display: block !important;
-        padding: 8px 12px !important;
-        text-decoration: none !important;
-        color: #343a40 !important;
-        border-radius: 4px !important;
-        font-size: 0.95rem !important;
-      }
-
-      .start-menu-item:hover {
-        background-color: #e9ecef !important; /* Hover effect for items */
-        color: #007bff !important; /* Highlight color on hover */
-      }
-
-      /* Optional: Style for a power/user section if added later */
-      .start-menu-footer {
-        margin-top: 10px !important;
-        padding-top: 10px !important;
-        border-top: 1px solid #e9ecef !important; /* Separator for footer */
-        display: flex !important;
-        justify-content: space-around !important;
-      }
-
-      .start-menu-footer .button-like-item { /* If using divs/spans styled as buttons */
-        padding: 6px 10px !important;
-        cursor: pointer !important;
-        border-radius: 4px !important;
-      }
-      .start-menu-footer .button-like-item:hover {
-        background-color: #d6d8db !important;
-      }
-    `;
-    document.head.appendChild(styleElement);
-    // --- End of Styles ---
-
     // Create the #taskbar div
     const taskbarDiv = document.createElement('div');
     taskbarDiv.id = 'taskbar';
@@ -248,17 +187,6 @@ document.addEventListener('DOMContentLoaded', async () => { // Made async
               console.error('Failed to execute app: os.kernel.exec not available for', appItem.textContent);
               alert('Error: Could not launch ' + appItem.textContent + '. OS components missing.');
             }
-              try {
-                console.log('Executing app:', execPath);
-                await window.os.kernal.exec(execPath); // Assuming exec might be async
-              } catch (e) {
-                console.error('Error during app execution:', execPath, e);
-                alert('Error: Could not launch ' + appItem.textContent + '. See console for details.');
-              }
-            } else {
-              console.error('Failed to execute app: os.kernal.exec not available for', appItem.textContent);
-              alert('Error: Could not launch ' + appItem.textContent + '. OS components missing.');
-            }
           } else {
             console.error('No executable path found for', appItem.textContent);
             alert('Error: No executable path for ' + appItem.textContent);
@@ -338,4 +266,4 @@ document.addEventListener('DOMContentLoaded', async () => { // Made async
   } else {
     console.error('#display element not found. Taskbar initialization failed.');
   }
-});
+})();

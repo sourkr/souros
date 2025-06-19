@@ -1,0 +1,5 @@
+{
+  "name": "Second App (Calc)",
+  "icon": "A:/apps/icons/app_two_icon.png",
+  "executable": "A:/apps/app_two_executable.js"
+}

@@ -1,7 +1,75 @@
 // Wait for the DOM to be fully loaded before trying to access #display
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => { // Made async
   // Get the #display div (assuming it's created by desktop.js)
   const displayDiv = document.getElementById('display');
+
+  // --- Function to Load Application Data ---
+  async function loadApplications() {
+    const infoPath = 'A:/apps/info/';
+    let applications = [];
+
+    // Ensure window.os and window.os.fs are available
+    if (!window.os || !window.os.fs) {
+      console.error('File system API (window.os.fs) not available.');
+      return applications;
+    }
+
+    let dirFd;
+    try {
+      console.log(`Attempting to open directory: ${infoPath}`);
+      dirFd = await window.os.fs.open(infoPath);
+      console.log(`Directory opened, fd: ${dirFd}`);
+      const entries = await window.os.fs.readdir(dirFd);
+      console.log(`Directory entries: ${entries.join(', ')}`);
+
+      for (const fileName of entries) {
+        if (fileName.endsWith('.json')) {
+          const fullPathToJsonFile = infoPath + fileName;
+          let fileFd;
+          try {
+            console.log(`Attempting to open file: ${fullPathToJsonFile}`);
+            fileFd = await window.os.fs.open(fullPathToJsonFile);
+            console.log(`File opened: ${fullPathToJsonFile}, fd: ${fileFd}`);
+            const content = await window.os.fs.read(fileFd); // Assuming read returns string content
+            console.log(`File content for ${fileName}: ${content.substring(0, 100)}...`); // Log snippet
+
+            try {
+              const appInfo = JSON.parse(content);
+              applications.push(appInfo);
+              console.log(`Successfully parsed and added: ${appInfo.name}`);
+            } catch (parseError) {
+              console.error(`Invalid JSON in app info file: ${fileName}`, parseError);
+            }
+          } catch (fileError) {
+            console.error(`Error reading or opening file: ${fullPathToJsonFile}`, fileError);
+          } finally {
+            if (fileFd !== undefined) {
+              try {
+                await window.os.fs.close(fileFd);
+                console.log(`Closed file: ${fullPathToJsonFile}`);
+              } catch (closeError) {
+                console.error(`Error closing file ${fullPathToJsonFile}:`, closeError);
+              }
+            }
+          }
+        }
+      }
+    } catch (dirError) {
+      console.error(`Error reading directory: ${infoPath}`, dirError);
+    } finally {
+      if (dirFd !== undefined) {
+        try {
+          await window.os.fs.close(dirFd);
+          console.log(`Closed directory: ${infoPath}`);
+        } catch (closeError) {
+          console.error(`Error closing directory ${infoPath}:`, closeError);
+        }
+      }
+    }
+    console.log('Finished loading applications. Total found:', applications.length);
+    return applications;
+  }
+  // --- End of Function to Load Application Data ---
 
   if (displayDiv) {
     // --- Add Styles for Start Menu and its items ---
@@ -141,18 +209,61 @@ document.addEventListener('DOMContentLoaded', () => {
     appsHeader.style.marginBottom = '5px';
     appsSection.appendChild(appsHeader);
 
-    // Add items to Apps section
-    const appItem1 = document.createElement('div');
-    appItem1.className = 'start-menu-item';
-    appItem1.textContent = 'Application 1';
-    appItem1.onclick = () => { alert('App 1 clicked!'); startMenu.style.display = 'none'; };
-    appsSection.appendChild(appItem1);
+    // Dynamically load and populate applications
+    const applications = await loadApplications();
+    if (applications && applications.length > 0) {
+      applications.forEach(appInfo => {
+        const appItem = document.createElement('div');
+        appItem.className = 'start-menu-item';
+        appItem.textContent = appInfo.name;
+        appItem.dataset.executable = appInfo.executable; // Store executable path
 
-    const appItem2 = document.createElement('div');
-    appItem2.className = 'start-menu-item';
-    appItem2.textContent = 'Text Editor';
-    appItem2.onclick = () => { alert('Text Editor clicked!'); startMenu.style.display = 'none'; };
-    appsSection.appendChild(appItem2);
+        if (appInfo.icon) {
+          const iconImg = document.createElement('img');
+          // Assuming paths like "A:/apps/icons/icon.png" map to "/fs/A/apps/icons/icon.png"
+          iconImg.src = appInfo.icon.replace(/^A:\//, '/fs/A/');
+          iconImg.style.width = '16px';
+          iconImg.style.height = '16px';
+          iconImg.style.marginRight = '8px';
+          iconImg.onerror = () => { // Hide icon on error
+            iconImg.style.display = 'none';
+            console.warn(`Icon not found or error loading: ${iconImg.src}`);
+          };
+          appItem.prepend(iconImg);
+        }
+
+        // Add onclick handler for app execution
+        appItem.onclick = async () => {
+          const execPath = appItem.dataset.executable;
+          if (execPath) {
+            if (window.os && window.os.kernal && typeof window.os.kernal.exec === 'function') {
+              try {
+                console.log('Executing app:', execPath);
+                await window.os.kernal.exec(execPath); // Assuming exec might be async
+              } catch (e) {
+                console.error('Error during app execution:', execPath, e);
+                alert('Error: Could not launch ' + appItem.textContent + '. See console for details.');
+              }
+            } else {
+              console.error('Failed to execute app: os.kernal.exec not available for', appItem.textContent);
+              alert('Error: Could not launch ' + appItem.textContent + '. OS components missing.');
+            }
+          } else {
+            console.error('No executable path found for', appItem.textContent);
+            alert('Error: No executable path for ' + appItem.textContent);
+          }
+          startMenu.style.display = 'none'; // Hide menu after attempting to launch
+        };
+        appsSection.appendChild(appItem);
+      });
+    } else {
+      const noAppsMsg = document.createElement('p');
+      noAppsMsg.textContent = 'No applications found.';
+      noAppsMsg.style.padding = '8px 12px';
+      noAppsMsg.style.fontSize = '0.9rem'; // Matches .start-menu-item approx
+      noAppsMsg.style.color = '#6c757d'; // Muted text color
+      appsSection.appendChild(noAppsMsg);
+    }
 
     startMenu.appendChild(appsSection);
 

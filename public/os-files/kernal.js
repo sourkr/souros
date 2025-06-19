@@ -105,7 +105,6 @@ window.os = {
 async function initializeCoreSystemsAndDrives() {
     console.log("Kernel: Initializing core systems and drives...");
 
-    // Load IndexDBRevised Driver from localStorage (like other core scripts)
     try {
         const idbDriverScript = localStorage.getItem('/indexdb-driver.js'); // Path assumption
         if (idbDriverScript) {
@@ -123,7 +122,6 @@ async function initializeCoreSystemsAndDrives() {
         // window.FileSystemDrivers.IndexDBRevised will fail, preventing its use.
     }
 
-    // Setup for Drive A (localStorage-driver)
     try {
         const localStorageDriverCode = localStorage.getItem('/localstorage-driver.js');
         if (localStorageDriverCode) {
@@ -140,8 +138,7 @@ async function initializeCoreSystemsAndDrives() {
     } catch (e) {
         console.error('Kernel: Error loading localStorage-driver for Drive A:', e);
     }
-
-    // Load BrowserStorageDriver from localStorage
+  
     try {
         const browserStorageDriverScript = localStorage.getItem('/browser-storage-driver.js'); // Path assumption
         if (browserStorageDriverScript) {
@@ -233,9 +230,6 @@ async function initializeCoreSystemsAndDrives() {
         }
     }
 
-
-    // Proceed with booting from A:/boot/boot.txt
-    // This part assumes Drive A (LocalStorage) was successfully mounted by initializeCoreSystemsAndDrives
     if (!os.drives.has('A:')) {
         console.error("Kernel: Drive A: not available. Cannot read /boot/boot.txt. System halt.");
         alert("CRITICAL ERROR: Drive A: (localStorage) failed to load. OS cannot boot.");

@@ -356,25 +356,14 @@
         }
     };
 
-    window.BrowserStorageDriverModule = {
-        driver: browserStorageDriver,
-        register: function(driveLetterToUse = 'C') {
-            driveLetterForCache = driveLetterToUse.toUpperCase();
-            initializeRootMetadata(); // Ensure root is there for the specific drive letter cache
-            if (window.os && window.os.drives) {
-                if (window.FileSystem) {
-                    // We register the raw driver object, FileSystem class will wrap it when Drives.addDrive is called
-                    window.os.drives.set(driveLetterForCache, browserStorageDriver);
-                    console.log(`BrowserStorageDriver (raw) registered for Drive ${driveLetterForCache}. Kernal should use Drives.addDrive.`);
-                } else {
-                     window.os.drives.set(driveLetterForCache, browserStorageDriver);
-                     console.warn(`BrowserStorageDriver registered raw for Drive ${driveLetterForCache}: (FileSystem class not found at registration time)`);
-                }
-            } else {
-                console.error("BrowserStorageDriver: window.os.drives not found. Cannot register.");
-            }
-        }
-    };
-    console.log("browser-storage-driver.js loaded. Call BrowserStorageDriverModule.register('DRIVE_LETTER') to activate.");
-
+    // Direct registration
+    if (window.os && window.os.drives) {
+        // initializeRootMetadata() was already called at the start of this script.
+        // driveLetterForCache is already 'C' by default, which getCacheName() will use.
+        // And metadataStore uses '/' as key, which is fine for a single drive instance.
+        window.os.drives.set('C:', browserStorageDriver);
+        console.log(`BrowserStorageDriver registered directly for Drive C:.`);
+    } else {
+        console.error("BrowserStorageDriver: window.os.drives not found. Cannot register directly.");
+    }
 })();

@@ -44,8 +44,14 @@ window.os = {
         },
 
         exec(path) {
-            var file = os.fs.open('A:/boot/' + path, 'read')
-            this.eval(os.fs.read(file))
+            var file = os.fs.open(path, 'read')
+            
+            try {
+                this.eval(os.fs.read(file))
+            } catch (err) {
+                console.error(err)
+            }
+
             os.fs.close(file)
         }
     }

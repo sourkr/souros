@@ -236,7 +236,18 @@ document.addEventListener('DOMContentLoaded', async () => { // Made async
         appItem.onclick = async () => {
           const execPath = appItem.dataset.executable;
           if (execPath) {
-            if (window.os && window.os.kernal && typeof window.os.kernal.exec === 'function') {
+            if (window.os?.kernel?.exec && typeof window.os.kernel.exec === 'function') {
+              try {
+                console.log('Executing app:', execPath);
+                await window.os.kernel.exec(execPath); // Assuming exec might be async
+              } catch (e) {
+                console.error('Error during app execution:', execPath, e);
+                alert('Error: Could not launch ' + appItem.textContent + '. See console for details.');
+              }
+            } else {
+              console.error('Failed to execute app: os.kernel.exec not available for', appItem.textContent);
+              alert('Error: Could not launch ' + appItem.textContent + '. OS components missing.');
+            }
               try {
                 console.log('Executing app:', execPath);
                 await window.os.kernal.exec(execPath); // Assuming exec might be async

@@ -106,6 +106,50 @@ container.appendChild(statusElem);
 
 os.win.setContent(windowId, container);
 
+// --- UI Blocker for OS Update ---
+const osUpdateOverlay = document.createElement('div');
+osUpdateOverlay.id = 'osUpdateOverlay';
+Object.assign(osUpdateOverlay.style, {
+  position: 'fixed',
+  top: '0',
+  left: '0',
+  width: '100%',
+  height: '100%',
+  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  zIndex: '10000', // High z-index to cover everything
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center'
+});
+
+const osUpdateMessage = document.createElement('div');
+osUpdateMessage.id = 'osUpdateMessage';
+Object.assign(osUpdateMessage.style, {
+  padding: '20px',
+  backgroundColor: '#fff',
+  borderRadius: '5px',
+  boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+  textAlign: 'center',
+  fontSize: '1.1rem',
+  color: '#333'
+});
+osUpdateMessage.textContent = 'OS update in progress... Please do not close this window.';
+
+osUpdateOverlay.appendChild(osUpdateMessage);
+
+function showUpdateOverlay() {
+  if (!document.body.contains(osUpdateOverlay)) {
+    document.body.appendChild(osUpdateOverlay);
+  }
+}
+
+function hideUpdateOverlay() {
+  if (document.body.contains(osUpdateOverlay)) {
+    document.body.removeChild(osUpdateOverlay);
+  }
+}
+// --- End UI Blocker ---
+
 // Logic section (same as before)
 let latestServerVersionInfo = null;
 
@@ -178,6 +222,9 @@ checkForUpdatesBtn.addEventListener('click', async () => {
 
 applyUpdateBtn.addEventListener('click', async () => {
   if (!latestServerVersionInfo) return;
+
+  showUpdateOverlay(); // Show overlay before starting update
+
   statusElem.textContent = `Applying update to ${latestServerVersionInfo.latestVersion}...`;
   applyUpdateBtn.disabled = true;
   applyUpdateBtn.style.opacity = '0.6';
@@ -192,10 +239,13 @@ applyUpdateBtn.addEventListener('click', async () => {
     availableVersionElem.textContent = '-';
     latestServerVersionInfo = null;
     statusElem.textContent = 'OS updated successfully! Restart might be required.';
+    location.reload(); // Refresh the page on successful update
   } catch (e) {
     console.error('Update failed:', e);
     statusElem.textContent = 'Failed to apply update.';
-    applyUpdateBtn.disabled = false;
-    applyUpdateBtn.style.opacity = '1';
+    // applyUpdateBtn.disabled = false; // Keep button disabled on failure for now
+    // applyUpdateBtn.style.opacity = '1';
+  } finally {
+    hideUpdateOverlay(); // Hide overlay after update attempt (success or failure)
   }
 });

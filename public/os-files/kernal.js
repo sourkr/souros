@@ -24,6 +24,11 @@ window.os = {
             return fd
         },
 
+        read(fd) {
+            const data = this.fdMap.get(fd)
+            return data.drive.read(data.fd)
+        },
+
         close(fd) {
             const data = this.fdMap.get(fd)
 
@@ -36,8 +41,23 @@ window.os = {
     kernal: {
         eval(code) {
             eval(code)
+        },
+
+        exec(path) {
+            var file = os.fs.open('A:/boot/' + path, 'read')
+            this.eval(os.fs.read(file))
+            os.fs.close(file)
         }
     }
 }
 
-os.kernal.eval(localStorage.getItem('/localstorage-driver.js'))
+;(() => {
+    os.kernal.eval(localStorage.getItem('/localstorage-driver.js'))
+
+    const dir = os.fs.open('A:/boot/boot.txt', 'read')
+    const list = os.fs.read(dir).split(/\n+/)
+
+    os.fs.close(dir)
+
+    list.forEach(path => os.kernal.exec(`A:/boot/${path}`))
+})()

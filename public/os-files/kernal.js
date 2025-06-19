@@ -38,7 +38,7 @@ window.os = {
         }
     },
 
-    kernal: {
+    kernel: {
         eval(code) {
             eval(code)
         },
@@ -58,12 +58,12 @@ window.os = {
 }
 
 ;(() => {
-    os.kernal.eval(localStorage.getItem('/localstorage-driver.js'))
+    os.kernel.eval(localStorage.getItem('/localstorage-driver.js'))
 
     const dir = os.fs.open('A:/boot/boot.txt', 'read')
     const list = os.fs.read(dir).split(/\n+/)
 
     os.fs.close(dir)
 
-    list.forEach(path => os.kernal.exec(`A:/boot/${path}`))
+    list.forEach(path => os.kernel.exec(`A:/boot/${path}`))
 })()

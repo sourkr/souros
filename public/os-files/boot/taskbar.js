@@ -1,12 +1,10 @@
-// Wait for the DOM to be fully loaded before trying to access #display
-document.addEventListener('DOMContentLoaded', async () => { // Made async
-  // Get the #display div (assuming it's created by desktop.js)
-  const displayDiv = document.getElementById('display');
+// Get the #display div (assuming it's created by desktop.js)
+const displayDiv = document.getElementById('display');
 
-  // --- Function to Load Application Data ---
-  async function loadApplications() {
-    const infoPath = 'A:/apps/info/';
-    let applications = [];
+// --- Function to Load Application Data ---
+async function loadApplications() {
+  const infoPath = 'A:/apps/info/';
+  let applications = [];
 
     // Ensure window.os and window.os.fs are available
     if (!window.os || !window.os.fs) {
@@ -71,67 +69,153 @@ document.addEventListener('DOMContentLoaded', async () => { // Made async
   }
   // --- End of Function to Load Application Data ---
 
+async function updateStartMenu(startButton) {
+  // Create the Start Menu
+  const startMenu = document.createElement('div');
+  startMenu.id = 'startMenu';
+
+  // Style the Start Menu (initially hidden)
+  startMenu.style.display = 'none';
+  startMenu.style.position = 'fixed';
+  startMenu.style.bottom = '40px'; // Taskbar height
+  startMenu.style.left = '0px';
+  startMenu.style.width = '250px';
+  startMenu.style.height = '300px';
+  startMenu.style.backgroundColor = '#ecf0f1';
+  startMenu.style.border = '1px solid #bdc3c7';
+  startMenu.style.borderBottom = 'none';
+  startMenu.style.boxShadow = '0 -2px 5px rgba(0,0,0,0.1)';
+  startMenu.style.zIndex = '999'; // Below taskbar, above other content
+  startMenu.style.padding = '10px';
+  startMenu.style.boxSizing = 'border-box';
+
+  // Create Applications section
+  const appsSection = document.createElement('div');
+  appsSection.className = 'start-menu-section'; // For potential future styling
+  const appsHeader = document.createElement('h4');
+  appsHeader.textContent = 'Applications';
+  appsHeader.style.marginTop = '0'; // Basic styling for header
+  appsHeader.style.marginBottom = '5px';
+  appsSection.appendChild(appsHeader);
+
+  // Dynamically load and populate applications
+  const applications = await loadApplications();
+  if (applications && applications.length > 0) {
+    applications.forEach(appInfo => {
+      const appItem = document.createElement('div');
+      appItem.className = 'start-menu-item';
+      appItem.textContent = appInfo.name;
+      appItem.dataset.executable = appInfo.executable; // Store executable path
+
+      if (appInfo.icon) {
+        const iconImg = document.createElement('img');
+        // Assuming paths like "A:/apps/icons/icon.png" map to "/fs/A/apps/icons/icon.png"
+        iconImg.src = appInfo.icon.replace(/^A:\//, '/fs/A/');
+        iconImg.style.width = '16px';
+        iconImg.style.height = '16px';
+        iconImg.style.marginRight = '8px';
+        iconImg.onerror = () => { // Hide icon on error
+          iconImg.style.display = 'none';
+          console.warn(`Icon not found or error loading: ${iconImg.src}`);
+        };
+        appItem.prepend(iconImg);
+      }
+
+      // Add onclick handler for app execution
+      appItem.onclick = async () => {
+        const execPath = appItem.dataset.executable;
+        if (execPath) {
+          if (window.os?.kernel?.exec && typeof window.os.kernel.exec === 'function') {
+            try {
+              console.log('Executing app:', execPath);
+              await window.os.kernel.exec(execPath); // Assuming exec might be async
+            } catch (e) {
+              console.error('Error during app execution:', execPath, e);
+              alert('Error: Could not launch ' + appItem.textContent + '. See console for details.');
+            }
+          } else {
+            console.error('Failed to execute app: os.kernel.exec not available for', appItem.textContent);
+            alert('Error: Could not launch ' + appItem.textContent + '. OS components missing.');
+          }
+        } else {
+          console.error('No executable path found for', appItem.textContent);
+          alert('Error: No executable path for ' + appItem.textContent);
+        }
+        startMenu.style.display = 'none'; // Hide menu after attempting to launch
+      };
+      appsSection.appendChild(appItem);
+    });
+  } else {
+    const noAppsMsg = document.createElement('p');
+    noAppsMsg.textContent = 'No applications found.';
+    noAppsMsg.style.padding = '8px 12px';
+    noAppsMsg.style.fontSize = '0.9rem'; // Matches .start-menu-item approx
+    noAppsMsg.style.color = '#6c757d'; // Muted text color
+    appsSection.appendChild(noAppsMsg);
+  }
+
+  startMenu.appendChild(appsSection);
+
+  // Create System section
+  const systemSection = document.createElement('div');
+  systemSection.className = 'start-menu-section'; // For potential future styling
+  const systemHeader = document.createElement('h4');
+  systemHeader.textContent = 'System';
+  systemHeader.style.marginTop = '10px'; // Basic styling for header
+  systemHeader.style.marginBottom = '5px';
+  systemSection.appendChild(systemHeader);
+
+  // Add items to System section
+  const settingsItem = document.createElement('div');
+  settingsItem.className = 'start-menu-item';
+  settingsItem.textContent = 'Settings';
+  settingsItem.onclick = () => { alert('Settings clicked!'); startMenu.style.display = 'none'; };
+  systemSection.appendChild(settingsItem);
+
+  const powerItem = document.createElement('div');
+  powerItem.className = 'start-menu-item';
+  powerItem.textContent = 'Shut Down';
+  powerItem.onclick = () => { alert('Shut Down clicked!'); startMenu.style.display = 'none'; };
+  systemSection.appendChild(powerItem);
+
+  startMenu.appendChild(systemSection);
+
+  // Append Start Menu to the body
+  document.body.appendChild(startMenu);
+
+  // --- Start Menu Toggle Functionality ---
+
+  // Toggle on Start Button Click
+  startButton.addEventListener('click', (event) => {
+    event.stopPropagation(); // Prevent this click from immediately closing the menu via the document listener
+    const isHidden = startMenu.style.display === 'none' || startMenu.style.display === '';
+    startMenu.style.display = isHidden ? 'block' : 'none';
+  });
+
+  // Close on Click Outside
+  document.addEventListener('click', (event) => {
+    if (startMenu.style.display === 'block') {
+      const isClickInsideMenu = startMenu.contains(event.target);
+      const isClickOnStartButton = startButton.contains(event.target);
+      if (!isClickInsideMenu && !isClickOnStartButton) {
+        startMenu.style.display = 'none';
+      }
+    }
+  });
+
+  // Close on Escape Key
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && startMenu.style.display === 'block') {
+      startMenu.style.display = 'none';
+    }
+  });
+  // --- End of Start Menu Toggle Functionality ---
+  console.log('Start Menu created/updated and toggle functionality added.');
+}
+
+// Main execution logic for taskbar
+async function initializeTaskbar() {
   if (displayDiv) {
-    // --- Add Styles for Start Menu and its items ---
-    const styleElement = document.createElement('style');
-    styleElement.type = 'text/css';
-    styleElement.innerHTML = `
-      #startMenu {
-        /* Base styles are already applied inline, but can be refined here */
-        background-color: #f8f9fa !important; /* A lighter, cleaner background */
-        border: 1px solid #dee2e6 !important; /* Softer border color */
-        border-top-left-radius: 0 !important; /* Keep sharp edge with taskbar */
-        border-top-right-radius: 4px !important; /* Slightly rounded top-right corner */
-        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08) !important; /* Softer, more modern shadow */
-        color: #212529 !important; /* Darker text for better readability */
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important; /* Modern system font stack */
-      }
-
-      .start-menu-section h4 {
-        margin-top: 0 !important; /* Overriding inline style */
-        margin-bottom: 8px !important; /* Overriding inline style */
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
-        color: #495057 !important; /* Slightly muted header color */
-        border-bottom: 1px solid #e9ecef !important; /* Separator for section headers */
-        padding-bottom: 4px !important;
-      }
-
-      .start-menu-item {
-        display: block !important;
-        padding: 8px 12px !important;
-        text-decoration: none !important;
-        color: #343a40 !important;
-        border-radius: 4px !important;
-        font-size: 0.95rem !important;
-      }
-
-      .start-menu-item:hover {
-        background-color: #e9ecef !important; /* Hover effect for items */
-        color: #007bff !important; /* Highlight color on hover */
-      }
-
-      /* Optional: Style for a power/user section if added later */
-      .start-menu-footer {
-        margin-top: 10px !important;
-        padding-top: 10px !important;
-        border-top: 1px solid #e9ecef !important; /* Separator for footer */
-        display: flex !important;
-        justify-content: space-around !important;
-      }
-
-      .start-menu-footer .button-like-item { /* If using divs/spans styled as buttons */
-        padding: 6px 10px !important;
-        cursor: pointer !important;
-        border-radius: 4px !important;
-      }
-      .start-menu-footer .button-like-item:hover {
-        background-color: #d6d8db !important;
-      }
-    `;
-    document.head.appendChild(styleElement);
-    // --- End of Styles ---
-
     // Create the #taskbar div
     const taskbarDiv = document.createElement('div');
     taskbarDiv.id = 'taskbar';
@@ -181,161 +265,17 @@ document.addEventListener('DOMContentLoaded', async () => { // Made async
     // Append Start Button to Taskbar
     taskbarDiv.appendChild(startButton);
 
-    // Create the Start Menu
-    const startMenu = document.createElement('div');
-    startMenu.id = 'startMenu';
-
-    // Style the Start Menu (initially hidden)
-    startMenu.style.display = 'none';
-    startMenu.style.position = 'fixed';
-    startMenu.style.bottom = '40px'; // Taskbar height
-    startMenu.style.left = '0px';
-    startMenu.style.width = '250px';
-    startMenu.style.height = '300px';
-    startMenu.style.backgroundColor = '#ecf0f1';
-    startMenu.style.border = '1px solid #bdc3c7';
-    startMenu.style.borderBottom = 'none';
-    startMenu.style.boxShadow = '0 -2px 5px rgba(0,0,0,0.1)';
-    startMenu.style.zIndex = '999'; // Below taskbar, above other content
-    startMenu.style.padding = '10px';
-    startMenu.style.boxSizing = 'border-box';
-
-    // Create Applications section
-    const appsSection = document.createElement('div');
-    appsSection.className = 'start-menu-section'; // For potential future styling
-    const appsHeader = document.createElement('h4');
-    appsHeader.textContent = 'Applications';
-    appsHeader.style.marginTop = '0'; // Basic styling for header
-    appsHeader.style.marginBottom = '5px';
-    appsSection.appendChild(appsHeader);
-
-    // Dynamically load and populate applications
-    const applications = await loadApplications();
-    if (applications && applications.length > 0) {
-      applications.forEach(appInfo => {
-        const appItem = document.createElement('div');
-        appItem.className = 'start-menu-item';
-        appItem.textContent = appInfo.name;
-        appItem.dataset.executable = appInfo.executable; // Store executable path
-
-        if (appInfo.icon) {
-          const iconImg = document.createElement('img');
-          // Assuming paths like "A:/apps/icons/icon.png" map to "/fs/A/apps/icons/icon.png"
-          iconImg.src = appInfo.icon.replace(/^A:\//, '/fs/A/');
-          iconImg.style.width = '16px';
-          iconImg.style.height = '16px';
-          iconImg.style.marginRight = '8px';
-          iconImg.onerror = () => { // Hide icon on error
-            iconImg.style.display = 'none';
-            console.warn(`Icon not found or error loading: ${iconImg.src}`);
-          };
-          appItem.prepend(iconImg);
-        }
-
-        // Add onclick handler for app execution
-        appItem.onclick = async () => {
-          const execPath = appItem.dataset.executable;
-          if (execPath) {
-            if (window.os?.kernel?.exec && typeof window.os.kernel.exec === 'function') {
-              try {
-                console.log('Executing app:', execPath);
-                await window.os.kernel.exec(execPath); // Assuming exec might be async
-              } catch (e) {
-                console.error('Error during app execution:', execPath, e);
-                alert('Error: Could not launch ' + appItem.textContent + '. See console for details.');
-              }
-            } else {
-              console.error('Failed to execute app: os.kernel.exec not available for', appItem.textContent);
-              alert('Error: Could not launch ' + appItem.textContent + '. OS components missing.');
-            }
-              try {
-                console.log('Executing app:', execPath);
-                await window.os.kernal.exec(execPath); // Assuming exec might be async
-              } catch (e) {
-                console.error('Error during app execution:', execPath, e);
-                alert('Error: Could not launch ' + appItem.textContent + '. See console for details.');
-              }
-            } else {
-              console.error('Failed to execute app: os.kernal.exec not available for', appItem.textContent);
-              alert('Error: Could not launch ' + appItem.textContent + '. OS components missing.');
-            }
-          } else {
-            console.error('No executable path found for', appItem.textContent);
-            alert('Error: No executable path for ' + appItem.textContent);
-          }
-          startMenu.style.display = 'none'; // Hide menu after attempting to launch
-        };
-        appsSection.appendChild(appItem);
-      });
-    } else {
-      const noAppsMsg = document.createElement('p');
-      noAppsMsg.textContent = 'No applications found.';
-      noAppsMsg.style.padding = '8px 12px';
-      noAppsMsg.style.fontSize = '0.9rem'; // Matches .start-menu-item approx
-      noAppsMsg.style.color = '#6c757d'; // Muted text color
-      appsSection.appendChild(noAppsMsg);
-    }
-
-    startMenu.appendChild(appsSection);
-
-    // Create System section
-    const systemSection = document.createElement('div');
-    systemSection.className = 'start-menu-section'; // For potential future styling
-    const systemHeader = document.createElement('h4');
-    systemHeader.textContent = 'System';
-    systemHeader.style.marginTop = '10px'; // Basic styling for header
-    systemHeader.style.marginBottom = '5px';
-    systemSection.appendChild(systemHeader);
-
-    // Add items to System section
-    const settingsItem = document.createElement('div');
-    settingsItem.className = 'start-menu-item';
-    settingsItem.textContent = 'Settings';
-    settingsItem.onclick = () => { alert('Settings clicked!'); startMenu.style.display = 'none'; };
-    systemSection.appendChild(settingsItem);
-
-    const powerItem = document.createElement('div');
-    powerItem.className = 'start-menu-item';
-    powerItem.textContent = 'Shut Down';
-    powerItem.onclick = () => { alert('Shut Down clicked!'); startMenu.style.display = 'none'; };
-    systemSection.appendChild(powerItem);
-
-    startMenu.appendChild(systemSection);
-
-    // Append Start Menu to the body
-    document.body.appendChild(startMenu);
-
-    // --- Start Menu Toggle Functionality ---
-
-    // Toggle on Start Button Click
-    startButton.addEventListener('click', (event) => {
-      event.stopPropagation(); // Prevent this click from immediately closing the menu via the document listener
-      const isHidden = startMenu.style.display === 'none' || startMenu.style.display === '';
-      startMenu.style.display = isHidden ? 'block' : 'none';
-    });
-
-    // Close on Click Outside
-    document.addEventListener('click', (event) => {
-      if (startMenu.style.display === 'block') {
-        const isClickInsideMenu = startMenu.contains(event.target);
-        const isClickOnStartButton = startButton.contains(event.target);
-        if (!isClickInsideMenu && !isClickOnStartButton) {
-          startMenu.style.display = 'none';
-        }
-      }
-    });
-
-    // Close on Escape Key
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && startMenu.style.display === 'block') {
-        startMenu.style.display = 'none';
-      }
-    });
-    // --- End of Start Menu Toggle Functionality ---
+    // Setup Start Menu
+    await updateStartMenu(startButton);
 
     // Log a message to confirm execution (optional)
-    console.log('Taskbar, Start Button, Start Menu created, and toggle functionality added.');
+    console.log('Taskbar and Start Button created.');
   } else {
     console.error('#display element not found. Taskbar initialization failed.');
   }
+}
+
+initializeTaskbar().catch(error => {
+  console.error("Error initializing taskbar:", error);
 });
+// })(); // Removed IIFE

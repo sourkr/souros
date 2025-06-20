@@ -1,5 +1,3 @@
-const AsyncFunction = (async function(){}).constructor
-
 window.os = {
     drives: new Map(),
     fs: {

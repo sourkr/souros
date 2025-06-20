@@ -8,8 +8,14 @@ const closedFds = [];
 load();
 
 os.drives.set('A:', {
-    driveSize() {
+    size() {
         return drive.size;
+    },
+
+    used() {
+        return Object.values(localStorage)
+            .map(e => e.length)
+            .reduce((a, b) => a + b, 0)
     },
 
     open(path, ...flags) {

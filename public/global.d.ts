@@ -1,14 +1,15 @@
 interface os {
     drives: Map<string /*drive name eg: 'A:', 'B:'*/, {
-        driveSize(): number
+        async size(): number
+        async used(): number
     }>,
     
     fs: {
-        open(path: string, ...flags: ('read' | 'write')[]): number
-        close(fd: number): void
-        read(fd: number): string | null
-        readdir(fd: number): string[] | never
-        close(fd: number): void
+        async open(path: string, ...flags: ('read' | 'write')[]): number
+        async close(fd: number): void
+        async read(fd: number): string | null
+        async readdir(fd: number): string[] | never
+        async close(fd: number): void
     }
 
     win: {

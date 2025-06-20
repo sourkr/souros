@@ -1,0 +1,5 @@
+{
+    "name": "Browser",
+    "icon": "A:/apps/icons/browser.png",
+    "executable": "A:/apps/browser_app.js"
+}

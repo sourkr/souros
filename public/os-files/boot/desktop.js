@@ -1,30 +1,30 @@
 // Create the #display div
-const displayDiv = document.createElement('div');
-displayDiv.id = 'display';
+const displayDiv = document.createElement('div')
+displayDiv.id = 'display'
 
 // Append #display to the body
-document.body.appendChild(displayDiv);
+document.body.appendChild(displayDiv)
 
 // Apply display: flex to #display
-displayDiv.style.display = 'flex';
-displayDiv.style.flexDirection = 'column'; // Added for taskbar layout
-displayDiv.style.overflow = 'hidden'; // Prevent scrollbars from unexpected content
+displayDiv.style.display = 'flex'
+displayDiv.style.flexDirection = 'column' // Added for taskbar layout
+displayDiv.style.overflow = 'hidden' // Prevent scrollbars from unexpected content
 
 // Create the #desktop div
-const desktopDiv = document.createElement('div');
-desktopDiv.id = 'desktop';
-desktopDiv.style.flexGrow = '1'; // Added to make desktop fill space
-desktopDiv.style.backgroundColor = '#7f8c8d'; // Desktop background color
+const desktopDiv = document.createElement('div')
+desktopDiv.id = 'desktop'
+desktopDiv.style.flexGrow = '1' // Added to make desktop fill space
+desktopDiv.style.backgroundColor = '#7f8c8d' // Desktop background color
 
 // Append #desktop to #display
-displayDiv.appendChild(desktopDiv);
+displayDiv.appendChild(desktopDiv)
 
 // Log a message to confirm execution (optional)
-console.log('Desktop environment initialized.');
+console.log('Desktop environment initialized.')
 
 // --- Add Styles for Start Menu and its items ---
-const styleElement = document.createElement('style');
-styleElement.type = 'text/css';
+const styleElement = document.createElement('style')
+styleElement.type = 'text/css'
 styleElement.innerHTML = `
   #startMenu {
     /* Base styles are already applied inline, but can be refined here */
@@ -78,6 +78,6 @@ styleElement.innerHTML = `
   .start-menu-footer .button-like-item:hover {
     background-color: #d6d8db !important;
   }
-`;
-document.head.appendChild(styleElement);
+`
+document.head.appendChild(styleElement)
 // --- End of Styles ---

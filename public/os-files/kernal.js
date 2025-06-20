@@ -1,5 +1,3 @@
-const AsyncFunction = (async function(){}).constructor
-
 window.os = {
     drives: new Map(),
     fs: {
@@ -72,19 +70,34 @@ window.os = {
         async exec(path) {
             var file = await os.fs.open(path, 'read')
             
-            try {
-                (new AsyncFunction(await os.fs.read(file)))()
-            } catch (err) {
-                console.log(err, path)
+            if (file === -1) {
+                console.error(`Failed to open boot file: ${path}`)
+                return
             }
 
-            await os.fs.close(file)
+            try {
+                const fileContent = await os.fs.read(file)
+                if (fileContent === null) { // It's good practice to check if read failed too
+                    console.error(`Failed to read boot file (null content): ${path}`)
+                } else {
+                    (new AsyncFunction(fileContent))()
+                }
+            } catch (err) {
+                console.error(`Error executing boot file: ${path}`, err) // Log the error object too
+            } finally { // Ensure close is called if file was opened
+                await os.fs.close(file)
+            }
         }
     }
 }
 
-const dir = await os.fs.open('A:/boot/boot.txt', 'read')
-const list = (await os.fs.read(dir)).split(/\n+/)
-await os.fs.close(dir)
+os.kernal.eval(localStorage.getItem('/localstorage-driver.js'))
 
-list.forEach(path => os.kernel.exec(`A:/boot/${path}`))
+const dir = await os.fs.open('A:/boot/boot.txt', 'read')
+if (dir === -1) {
+    throw new Error("Failed to open A:/boot/boot.txt")
+} else {
+    const list = (await os.fs.read(dir)).split(/\n+/)
+    await os.fs.close(dir)
+    list.forEach(path => os.kernel.exec(`A:/boot/${path}`))
+}

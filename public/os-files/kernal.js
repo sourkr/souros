@@ -91,9 +91,6 @@ window.os = {
     }
 }
 
-
-os.kernel.eval(localStorage.getItem('/localstorage-driver.js'))
-
 const dir = await os.fs.open('A:/boot/boot.txt', 'read')
 if (dir === -1) {
     console.error("Failed to open A:/boot/boot.txt")

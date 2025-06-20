@@ -107,7 +107,7 @@ if (!success) {
 }
 
 // --- Navigation Logic ---
-function showDrives() {
+async function showDrives() {
     pathInput.value = 'Drives'
     mainContentArea.innerHTML = '<p><em>Loading drives...</em></p>'
     
@@ -124,7 +124,7 @@ function showDrives() {
             return
         }
         
-        window.os.drives.forEach((driveInfo, driveName) => {
+        window.os.drives.forEach(async (driveInfo, driveName) => {
             const itemDiv = document.createElement('div')
             itemDiv.className = 'file-explorer-item folder'
             
@@ -135,7 +135,7 @@ function showDrives() {
             const nameSpan = document.createElement('span')
             nameSpan.className = 'file-explorer-item-name'
             
-            const driveSize = driveInfo.driveSize()
+            const driveSize = await driveInfo.size()
             const sizeText = formatBytes(driveSize)
             nameSpan.textContent = `${driveName} (${sizeText})`
             
@@ -164,7 +164,7 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-function navigateTo(path) {
+async function navigateTo(path) {
     if (!window.os || !window.os.fs) {
         mainContentArea.innerHTML = '<p style="color: red;">Error: File system API not available.</p>'
         pathInput.value = path
@@ -177,7 +177,7 @@ function navigateTo(path) {
     let dirFd = -1
     try {
         // Open directory for reading
-        dirFd = window.os.fs.open(path, 'read')
+        dirFd = await window.os.fs.open(path, 'read')
 
         if (typeof dirFd !== 'number' || dirFd < 0) {
             mainContentArea.innerHTML = `<p style="color: red;">Error: Could not open directory '${path}'. Invalid file descriptor: ${dirFd}</p>`
@@ -187,16 +187,16 @@ function navigateTo(path) {
 
         let entries
         try {
-            entries = window.os.fs.readdir(dirFd)
+            entries = await window.os.fs.readdir(dirFd)
         } catch (readdirError) {
             mainContentArea.innerHTML = `<p style="color: red;">Error reading directory '${path}': ${readdirError.message}</p>`
             console.error(`navigateTo: Error reading directory ${path}`, readdirError)
-            window.os.fs.close(dirFd)
+            await window.os.fs.close(dirFd)
             return
         }
 
         // Close the directory handle
-        window.os.fs.close(dirFd)
+        await window.os.fs.close(dirFd)
         dirFd = -1
 
         mainContentArea.innerHTML = ''
@@ -263,7 +263,7 @@ function navigateTo(path) {
         
         if (typeof dirFd === 'number' && dirFd >= 0) {
             try {
-                window.os.fs.close(dirFd)
+                await window.os.fs.close(dirFd)
                 console.log(`navigateTo: Successfully closed directory handle ${dirFd} in error handler.`)
             } catch (closeError) {
                 console.error(`navigateTo: Error closing directory handle ${dirFd} in error handler:`, closeError)

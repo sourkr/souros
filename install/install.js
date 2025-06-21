@@ -7,6 +7,7 @@ async function installOS() {
     await updateDir('/api/os-files-content/', '/')
     console.log(drive);
     localStorage.setItem('drive', JSON.stringify(drive))
+    msg.innerText = 'OS Installed Successfully'
 }
 
 async function updateDir(webDir, sysDir) {

@@ -1,5 +1,6 @@
 window.os = {
     drives: new Map(),
+
     fs: {
         fdMap: new Map(),
         fdIndex: 0,
@@ -59,6 +60,8 @@ window.os = {
     },
 
     kernel: {
+        threads = new Map()
+
         eval(code) {
             try {
                 eval(code)
@@ -67,12 +70,11 @@ window.os = {
             }
         },
 
-        async exec(path) {
+        async exec(path, exports = {}) {
             var file = await os.fs.open(path, 'read')
             
             if (file === -1) {
-                console.error(`Failed to open boot file: ${path}`)
-                return
+                throw new Error(`No such file or directory: ${path}`)
             }
 
             try {
@@ -80,24 +82,58 @@ window.os = {
                 if (fileContent === null) { // It's good practice to check if read failed too
                     console.error(`Failed to read boot file (null content): ${path}`)
                 } else {
-                    (new AsyncFunction(fileContent))()
+                    await (new AsyncFunction('exports', fileContent))(exports)
                 }
             } catch (err) {
-                console.error(`Error executing boot file: ${path}`, err) // Log the error object too
-            } finally { // Ensure close is called if file was opened
+                const lines = err.stack.split('\n')
+                    .slice(0, -1)
+                    .map(line => line
+                        .replace(/at eval \(eval at <anonymous> \(.+\), <anonymous>(:\d+:\d+)\)/, `at ${path}$1`)
+                        .replace(/(at \w+) \(eval at <anonymous> \(.+\), <anonymous>(:\d+:\d+)\)/, `$1 ${path}$2`))
+                
+                err.stack = lines.join('\n')
+                throw err
+            } finally {
                 await os.fs.close(file)
             }
+        },
+
+        async thread(path) {
+            if (!this.code) {
+                const fd = await os.fs.open('A:/thread.js', 'read')
+                this.code = await os.fs.read(fd)
+                await os.fs.close(fd)
+            }
+
+            
         }
     }
 }
 
-os.kernal.eval(localStorage.getItem('/localstorage-driver.js'))
+;(async () => {
+    const loaded = new Map()
 
-const dir = await os.fs.open('A:/boot/boot.txt', 'read')
-if (dir === -1) {
-    throw new Error("Failed to open A:/boot/boot.txt")
-} else {
-    const list = (await os.fs.read(dir)).split(/\n+/)
-    await os.fs.close(dir)
-    list.forEach(path => os.kernel.exec(`A:/boot/${path}`))
-}
+    async function require(path) {
+        if (loaded.has(path)) return loaded.get(path)
+
+        const exports = {}
+        await os.kernel.exec(path, exports)
+
+        loaded.set(path, exports)
+        return exports
+    }
+
+    os.kernel.eval(localStorage.getItem('/localstorage-driver.js'))
+
+    const dir = await os.fs.open('A:/boot/boot.txt', 'read')
+
+    if (dir === -1) {
+        throw new Error("Failed to open A:/boot/boot.txt")
+    } else {
+        const list = (await os.fs.read(dir)).split(/\n+/)
+        await os.fs.close(dir)
+        list.forEach(path => os.kernel.exec(`A:/boot/${path}`))
+    }
+
+    window.require = require
+})()

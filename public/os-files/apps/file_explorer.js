@@ -1,10 +1,10 @@
-const windowId = window.os.win.openWindow()
+const windowId = os.win.openWindow()
 
 if (windowId === -1) {
-    console.error('File Explorer: Failed to open window.')
+    throw new Error('File Explorer: Failed to open window.')
 }
 
-window.os.win.setTitle(windowId, 'File Explorer')
+os.win.setTitle(windowId, 'File Explorer')
 
 // Main container for the app's UI
 const appContainer = document.createElement('div')
@@ -101,10 +101,7 @@ appContainer.appendChild(addressBarContainer)
 appContainer.appendChild(mainContentArea)
 
 // Set the assembled UI as the window's content
-const success = window.os.win.setContent(windowId, appContainer)
-if (!success) {
-    console.error('File Explorer: Failed to set content for window ' + windowId)
-}
+os.win.setContent(windowId, appContainer)
 
 // --- Navigation Logic ---
 async function showDrives() {
@@ -112,19 +109,19 @@ async function showDrives() {
     mainContentArea.innerHTML = '<p><em>Loading drives...</em></p>'
     
     try {
-        if (!window.os || !window.os.drives) {
+        if (!os || !os.drives) {
             mainContentArea.innerHTML = '<p style="color: red;">Error: Drives API not available.</p>'
             return
         }
         
         mainContentArea.innerHTML = ''
         
-        if (window.os.drives.size === 0) {
+        if (os.drives.size === 0) {
             mainContentArea.innerHTML = '<p><em>No drives available.</em></p>'
             return
         }
         
-        window.os.drives.forEach(async (driveInfo, driveName) => {
+        os.drives.forEach(async (driveInfo, driveName) => {
             const itemDiv = document.createElement('div')
             itemDiv.className = 'file-explorer-item folder'
             
@@ -165,7 +162,7 @@ function formatBytes(bytes) {
 }
 
 async function navigateTo(path) {
-    if (!window.os || !window.os.fs) {
+    if (!os || !os.fs) {
         mainContentArea.innerHTML = '<p style="color: red;">Error: File system API not available.</p>'
         pathInput.value = path
         return
@@ -177,7 +174,7 @@ async function navigateTo(path) {
     let dirFd = -1
     try {
         // Open directory for reading
-        dirFd = await window.os.fs.open(path, 'read')
+        dirFd = await os.fs.open(path, 'read')
 
         if (typeof dirFd !== 'number' || dirFd < 0) {
             mainContentArea.innerHTML = `<p style="color: red;">Error: Could not open directory '${path}'. Invalid file descriptor: ${dirFd}</p>`
@@ -187,16 +184,16 @@ async function navigateTo(path) {
 
         let entries
         try {
-            entries = await window.os.fs.readdir(dirFd)
+            entries = await os.fs.readdir(dirFd)
         } catch (readdirError) {
             mainContentArea.innerHTML = `<p style="color: red;">Error reading directory '${path}': ${readdirError.message}</p>`
             console.error(`navigateTo: Error reading directory ${path}`, readdirError)
-            await window.os.fs.close(dirFd)
+            await os.fs.close(dirFd)
             return
         }
 
         // Close the directory handle
-        await window.os.fs.close(dirFd)
+        await os.fs.close(dirFd)
         dirFd = -1
 
         mainContentArea.innerHTML = ''
@@ -263,7 +260,7 @@ async function navigateTo(path) {
         
         if (typeof dirFd === 'number' && dirFd >= 0) {
             try {
-                await window.os.fs.close(dirFd)
+                await os.fs.close(dirFd)
                 console.log(`navigateTo: Successfully closed directory handle ${dirFd} in error handler.`)
             } catch (closeError) {
                 console.error(`navigateTo: Error closing directory handle ${dirFd} in error handler:`, closeError)

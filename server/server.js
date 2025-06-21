@@ -1,16 +1,16 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || parseInt(process.argv[3]) || 3000;
 
 const publicPath = path.join(__dirname, '..', 'public');
 const installPath = path.join(__dirname, '..', 'install');
 const osFilesRoot = path.join(publicPath, 'os-files'); // This points to public/os-files/
 
-// Middleware to serve static files
-// Serve install directory at /install
 app.use('/install', express.static(installPath));
 
 // Serve public directory at /
@@ -107,6 +107,31 @@ app.get('/api/os-version', async (req, res) => {
         }
     }
 });
+
+app.get('/proxy', async (req, res) => {
+    const targetUrl = req.query.url;
+  
+    if (!targetUrl) {
+      return res.status(400).send('Missing target URL');
+    }
+  
+    try {
+      const response = await axios.get(targetUrl, {
+        // Keep esponseType as 'arraybuffer' to handle binary data like images
+        responseType: 'arraybuffer'
+      });
+  
+      let data = response.data;
+    //   const contentType = response.headers['content-type'];
+  
+      res.set(response.headers)
+      res.removeHeader('X-Frame-Options')
+      res.send(data)
+    } catch (error) {
+      console.error('Error fetching URL:', error.message);
+      res.status(500).send('Error fetching URL');
+    }
+  });
 
 // Start the Express server
 app.listen(PORT, () => {

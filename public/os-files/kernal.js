@@ -60,7 +60,7 @@ window.os = {
     },
 
     kernel: {
-        threads = new Map()
+        threads: new Map(),
 
         eval(code) {
             try {
@@ -99,13 +99,12 @@ window.os = {
         },
 
         async thread(path) {
-            if (!this.code) {
-                const fd = await os.fs.open('A:/thread.js', 'read')
-                this.code = await os.fs.read(fd)
-                await os.fs.close(fd)
-            }
-
+            const thread = new Worker("thread.js")
+            const fd = await os.fs.open(path, 'read')
+            const code = await os.fs.read(fd)
             
+            await os.fs.close(fd)
+            thread.postMessage({ cmd: 'exec', code })
         }
     }
 }

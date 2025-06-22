@@ -1,19 +1,13 @@
 const windows = new Map();
 
 os.registerSyscall("window.open", (proc, id) => {
-    if (!windows.has(proc.id)) windows.set(proc.id, new Map());
-    windows.get(proc.id).set(id, new Window());
+    if (!windows.has(proc)) windows.set(proc, new Map());
+    windows.get(proc).set(id, new Window(proc, id));
 
-    proc.post({
-        cmd: "proc.keep_alive",
-        onclose: { name: "window.close", args: [id] },
-    });
+    proc.keepAlive(close);
 });
 
-os.registerSyscall("window.close", (proc, id) => {
-    windows.get(proc).get(id).close();
-    windows.get(proc).delete(id);
-});
+os.registerSyscall("window.close", close);
 
 os.registerSyscall(
     "window.title",
@@ -21,11 +15,20 @@ os.registerSyscall(
 );
 
 os.registerSyscall("window.content", (proc, id, content) =>
-    windows.get(proc).get(id).content.append(content),
+    windows.get(proc).get(id).content.append(os.gui.elements.get(proc).get(content)),
 );
 
+function close(proc, id) {
+    windows.get(proc).get(id).close();
+    windows.get(proc).delete(id);
+    proc.kill()
+}
+
 class Window {
-    constructor() {
+    constructor(proc, id) {
+        this.proc = proc
+        this.id = id
+        
         this.window = document.createElement("div");
         this.content = document.createElement("div");
         this.#titlebar();
@@ -101,9 +104,7 @@ class Window {
             this.moving = null;
         };
 
-        this.closeBtn.onclick = () => {
-            os.win.closeWindow(id);
-        };
+        this.closeBtn.onclick = () => close(this.proc, this.id);
     }
 
     #titlebar() {

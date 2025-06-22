@@ -32,7 +32,7 @@ class Process {
 
             case "exit":
                 this.#onclose.forEach((listener) => listener());
-                this.#thread.terminate();
+                this.kill()
                 break;
 
             case "error":
@@ -52,6 +52,10 @@ class Process {
         this.keepAlive = true;
     }
 
+    kill() {
+        this.#thread.terminate()
+    }
+    
     static async create(path) {
         const proc = new Process();
 

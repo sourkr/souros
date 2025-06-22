@@ -1,27 +1,27 @@
-const { Window, Element } = await require("A:/apps/libs/gui.js");
+const { Window, Element, FlexBox } = await require("A:/apps/libs/gui.js");
 
-// const mainContainer = new Element("div");
+const mainContainer = new Element("div");
 
 function main() {
     const window = new Window();
-    // window.title = "File Explorer";
+    window.title = "File Explorer";
 
-    // const root = new FlexBox('column')
-    // window.content = root
+    const root = new FlexBox("column");
+    window.content = root;
 
-    // const addressContainer = new FlexBox()
-    // root.append(addressBarContainer)
-    // addressContainer.gap = '5px'
+    const addressBarContainer = new FlexBox();
+    root.append(addressBarContainer);
+    addressBarContainer.gap = "5px";
 
-    // const upBtn = new Element('button')
-    // upBtn.text = 'up'
-    // addressBarContainer.append(upBtn)
+    const upBtn = new Element("button");
+    upBtn.text = "up";
+    addressBarContainer.append(upBtn);
 
-    // const addressBar = new Element('div')
-    // addressBar.css('flex', '1')
-    // addressBarContainer.append(addressBar)
+    const addressBar = new Element("div");
+    addressBar.css("flex", "1");
+    addressBarContainer.append(addressBar);
 
-    // mainContainer.css('flex', '1')
+    mainContainer.css("flex", "1");
 }
 
 function update(path) {

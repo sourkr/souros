@@ -3,10 +3,10 @@ class Element {
     static #deleted = [];
 
     constructor(tag) {
-        if (deleted.length) this._id = Element.#deleted.shift();
-        else this._id = Element._id++;
+        if (Element.#deleted.length) this._id = Element.#deleted.shift();
+        else this._id = Element.#id++;
 
-        syscall("dom.create", this._id);
+        syscall("dom.create", this._id, tag);
     }
 
     css(prop, val) {
@@ -14,28 +14,28 @@ class Element {
     }
 
     set text(str) {
-        syscall("dom.prop", _id, "innerText", str);
+        syscall("dom.prop", this._id, "innerText", str);
     }
 
     append(ele) {
-        syscall("dom.append", _id, ele._id);
+        syscall("dom.append", this._id, ele._id);
     }
 
     size(dim) {
-        css("width", dim);
-        css("height", dim);
+        this.css("width", dim);
+        this.css("height", dim);
     }
 }
 
 class FlexBox extends Element {
     constructor(dir = "row") {
         super("div");
-        css("display", "flex");
-        css("flex-direction", dir);
+        this.css("display", "flex");
+        this.css("flex-direction", dir);
     }
 
     set gap(dim) {
-        css("gap", dim);
+        this.css("gap", dim);
     }
 }
 
@@ -57,9 +57,10 @@ class Window {
     }
 
     set content(ele) {
-        syscall("window.title", this.#_id, ele._id);
+        syscall("window.content", this.#_id, ele._id);
     }
 }
 
-exports.Window = Window;
-exports.Element = Element;
+exports.Window = Window
+exports.Element = Element
+exports.FlexBox = FlexBox

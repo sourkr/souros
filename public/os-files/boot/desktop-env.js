@@ -1,34 +1,43 @@
 const elements = new Map();
 
-os.registerSyscall("element.create", (proc, id, tag) => {
+os.registerSyscall("dom.create", (proc, id, tag) => {
     const element = document.createElement(tag);
 
-    if (!elements.has(proc.id)) elements.set(proc.id, new Map());
-    elements.get(proc.id).set(id, element);
+    if (!elements.has(proc)) elements.set(proc, new Map());
+    elements.get(proc).set(id, element);
 
-    proc.onclose(() => elements.get(proc.id).delete(id));
+    proc.onclose(() => elements.get(proc).delete(id));
 });
 
-os.registerSyscall("element.append", (proc, id, childId) => {
-    const element = elements.get(proc.id).get(id);
-    const child = elements.get(proc.id).get(childId);
+os.registerSyscall("dom.append", (proc, id, childId) => {
+    const element = elements.get(proc).get(id);
+    const child = elements.get(proc).get(childId);
 
     element.append(child);
-    proc.keepAlive(() => element.removeChild(child));
+    // proc.keepAlive(() => element.removeChild(child));
+    proc.onclose(() => {
+        // child.remove()
+        elements.get(proc).delete(childId);
+        if (elements.get(proc).size == 0) elements.delete(proc);
+    });
 });
 
 os.registerSyscall(
-    "element.prop",
-    (proc, id, prop, value) => (elements.get(proc.id).get(id)[prop] = value),
+    "dom.prop",
+    (proc, id, prop, value) => (elements.get(proc).get(id)[prop] = value),
 );
 
-os.registerSyscall("element.attr", (proc, id, attr, value) =>
-    elements.get(proc.id).get(id).setAttribute(attr, value),
+os.registerSyscall("dom.attr", (proc, id, attr, value) =>
+    elements.get(proc).get(id).setAttribute(attr, value),
 );
 
-os.registerSyscall("element.css", (proc, id, prop, value) =>
-    elements.get(proc.id).get(id).style.setProperty(prop, value),
+os.registerSyscall("dom.css", (proc, id, prop, value) =>
+    elements.get(proc).get(id).style.setProperty(prop, value),
 );
+
+os.gui = {
+    elements: elements,
+};
 
 function main() {
     new Desktop();

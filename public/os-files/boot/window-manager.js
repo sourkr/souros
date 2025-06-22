@@ -80,6 +80,7 @@ class Window {
 
     #events() {
         this.titlebar.onmousedown = (ev) => {
+            console.log(ev);
             this.moving = Point2D.fromEvent(ev);
         };
 
@@ -89,8 +90,10 @@ class Window {
                 const delta = pos.subtract(this.moving);
                 this.moving = pos;
 
-                this.window.style.left = `${parseInt(this.window.style.left) || 0}px`;
-                this.window.style.top = `${parseInt(this.window.style.top) || 0}px`;
+                const rect = this.window.getBoundingClientRect();
+
+                this.window.style.left = `${rect.x + delta.x}px`;
+                this.window.style.top = `${rect.y + delta.y}px`;
             }
         };
 
@@ -123,5 +126,9 @@ class Point2D {
 
     static fromEvent(e) {
         return new Point2D(e.clientX, e.clientY);
+    }
+
+    subtract(p) {
+        return new Point2D(this.x - p.x, this.y - p.y);
     }
 }

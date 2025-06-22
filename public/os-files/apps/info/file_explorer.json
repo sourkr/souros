@@ -1,5 +1,5 @@
 {
   "name": "File Explorer",
-  "executable": "A:/apps/file_explorer.js",
+  "executable": "A:/apps/file_explorer_thread.js",
   "icon": "A:/apps/icons/folder-open.svg"
 }

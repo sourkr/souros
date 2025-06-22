@@ -1,3 +1,74 @@
+class Process {
+    #thread;
+    #onclose = [];
+
+    constructor() {
+        this.#thread = new Worker("thread.js");
+
+        this.#thread.onmessage = (ev) => this.#receive(ev.data);
+    }
+
+    post(data) {
+        this.#thread.postMessage(data);
+    }
+
+    async #receive(data) {
+        switch (data.cmd) {
+            case "syscall":
+                os.syscalls.get(data.name)(this, ...data.args);
+                break;
+
+            case "sysget":
+                console.log(data);
+                this.post({
+                    cmd: "sysget",
+                    id: data.id,
+                    value: await os.sysgets.get(data.name)(this, ...data.args),
+                });
+                break;
+
+            case "end":
+                if (this.keepAlive) break;
+
+            case "exit":
+                this.#onclose.forEach((listener) => listener());
+                this.#thread.terminate();
+                break;
+
+            case "error":
+                throw data.error;
+
+            case "log":
+                console.log(data.msg);
+        }
+    }
+
+    onclose(listener) {
+        this.#onclose.push(listener);
+    }
+
+    keepAlive(listener) {
+        this.#onclose.push(listener);
+        this.keepAlive = true;
+    }
+
+    static async create(path) {
+        const proc = new Process();
+
+        const fd = await os.fs.open(path, "read");
+
+        if (fd === -1) {
+            throw new Error(`No such file or directory: ${path}`);
+        }
+
+        const code = await os.fs.read(fd);
+
+        await os.fs.close(fd);
+
+        proc.post({ cmd: "exec", code, path });
+    }
+}
+
 window.os = {
     drives: new Map(),
 
@@ -102,7 +173,7 @@ window.os = {
                                 `$1 ${path}$2`,
                             ),
                     );
-
+                console.log(lines);
                 err.stack = lines.join("\n");
                 throw err;
             } finally {
@@ -126,74 +197,16 @@ window.os = {
 window.syscall = (name, ...args) => os.syscalls.get(name)(...args);
 window.sysget = (name, ...args) => os.sysgets.get(name)(...args);
 
-class Process {
-    #thread;
-    #onclose = [];
-    
-    constructor() {
-        this.#thread = new Worker("thread.js");
-
-        this.#thread.onmessage = (ev) => this.#receive(ev.data);
-    }
-
-    post(data) {
-        this.#thread.postMessage(data);
-    }
-
-    #receive(data) {
-        switch (data.cmd) {
-            case "exec":
-                this.post({ cmd: "exec", code: data.code });
-                break;
-
-            case "syscall":
-                os.syscalls.get(data.name)(this, ...data.args);
-                break;
-
-            case "sysget":
-                this.post({
-                    cmd: "sysget",
-                    id: data.id,
-                    value: os.sysgets.get(data.name)(this, ...data.args),
-                });
-                break;
-
-            case "end":
-                if (this.keepAlive) break;;
-
-            case "exit":
-                this.#onclose.forEach((listener) => listener());
-                this.#thread.terminate();
-                break;
-                
-            case "error":
-                throw data.error;
-        }
-    }
-
-    onclose(listener) {
-        this.#onclose.push(listener);
-    }
-
-    keepAlive(listener) {
-        this.#onclose.push(listener);
-        this.keepAlive = true;
-    }
-    
-    static async create(path) {
-        const proc = new Process();
-
-        const fd = await os.fs.open(path, "read");
-        const code = await os.fs.read(fd);
-
-        await os.fs.close(fd);
-
-        proc.post({ cmd: "exec", code });
-    }
-}
-
 (async () => {
     os.registerSysget("fs.drives", () => Array.from(os.drives.keys()));
+
+    os.registerSysget("require", async (proc, path) => {
+        const fd = await os.fs.open(path, "read");
+        if (fd === -1) throw new Error(`No such file or directory: ${path}`);
+        const code = await os.fs.read(fd);
+        await os.fs.close(fd);
+        return code;
+    });
 
     const loaded = new Map();
 
@@ -220,4 +233,5 @@ class Process {
     }
 
     window.require = require;
+    window.Process = Process;
 })();

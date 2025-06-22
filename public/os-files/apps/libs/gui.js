@@ -1,65 +1,65 @@
 class Element {
-	static #id = 0
-	static #deleted = []
+    static #id = 0;
+    static #deleted = [];
 
-	constructor(tag) {
-		if (deleted.length) this._id = Element.#deleted.shift()
-		else this._id = Element._id++
+    constructor(tag) {
+        if (deleted.length) this._id = Element.#deleted.shift();
+        else this._id = Element._id++;
 
-		syscall('dom.create', this._id)
-	}
+        syscall("dom.create", this._id);
+    }
 
-	css(prop, val) {
-		syscall('dom.css', this._id, prop, val)
-	}
+    css(prop, val) {
+        syscall("dom.css", this._id, prop, val);
+    }
 
-	set text(str) {
-		syscall('dom.prop', _id, 'innerText', str)
-	}
+    set text(str) {
+        syscall("dom.prop", _id, "innerText", str);
+    }
 
-	append(ele) {
-		syscall('dom.append', _id, ele._id)
-	}
+    append(ele) {
+        syscall("dom.append", _id, ele._id);
+    }
 
-	size(dim) {
-		css('width', dim)
-		css('height', dim)
-	}
+    size(dim) {
+        css("width", dim);
+        css("height", dim);
+    }
 }
 
 class FlexBox extends Element {
-	constructor(dir = 'row') {
-		super('div')
-		css('display', 'flex')
-		css('flex-direction', dir)
-	}
+    constructor(dir = "row") {
+        super("div");
+        css("display", "flex");
+        css("flex-direction", dir);
+    }
 
-	set gap(dim) {
-		css('gap', dim)
-	}
+    set gap(dim) {
+        css("gap", dim);
+    }
 }
 
 class Window {
-	static #id = 0
-	static #closed = []
+    static #id = 0;
+    static #closed = [];
 
-	#id;
-	
-	constructor(tag) {
-			if (Window.#closed.length) this.#id = Window.#closed.shift()
-			else this.#id = Window.#id++
+    #_id;
 
-			syscall('window.open', this.#id)
-	}
+    constructor(tag) {
+        if (Window.#closed.length) this.#_id = Window.#closed.shift();
+        else this.#_id = Window.#id++;
 
-	set title(title) {
-			syscall('window.title', this.#id, title)
-	}
+        syscall("window.open", this.#_id);
+    }
 
-	set content(ele) {
-			syscall('window.title', this.#id, ele._id)
-	}
+    set title(title) {
+        syscall("window.title", this.#_id, title);
+    }
+
+    set content(ele) {
+        syscall("window.title", this.#_id, ele._id);
+    }
 }
 
-exports.Window = Window
-exports.Element = Element
+exports.Window = Window;
+exports.Element = Element;

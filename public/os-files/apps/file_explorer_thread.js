@@ -1,4 +1,4 @@
-const { Window, Element } = require("A:/apps/libs/gui.js");
+const { Window, Element } = await require("A:/apps/libs/gui.js");
 
 // const mainContainer = new Element("div");
 

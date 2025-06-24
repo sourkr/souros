@@ -36,7 +36,7 @@ class Taskbar {
         this.startBtn.style.height = "30px";
         this.startBtn.style.padding = "5px";
 
-        hover(this.startBtn);
+        hover(this.startBtn, 0.25);
     }
 
     #events() {
@@ -122,11 +122,12 @@ class StartMenu {
     }
 }
 
-function hover(ele) {
+function hover(ele, intensity = 0.1) {
     ele.style.cursor = "pointer";
     ele.style.transition = "background .25s";
 
-    ele.onmouseenter = () => (ele.style.background = "hsl(0 0 50 / .25)");
+    ele.onmouseenter = () =>
+        (ele.style.background = `hsl(0 0 50 / ${intensity})`);
     ele.onmouseout = () => (ele.style.background = "transparent");
 }
 

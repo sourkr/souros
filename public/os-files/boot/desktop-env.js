@@ -35,6 +35,26 @@ os.registerSyscall("dom.css", (proc, id, prop, value) =>
     elements.get(proc).get(id).style.setProperty(prop, value),
 );
 
+os.registerSyscall("dom.on", (proc, id, event, eventId) => {
+    elements
+        .get(proc)
+        .get(id)
+        .addEventListener(event, () => {
+            proc.post({ cmd: "event", id: eventId });
+        });
+});
+
+os.registerSyscall("dom.off", (proc, id) =>
+    elements.get(proc).get(id).remove(),
+);
+
+os.registerSyscall("dom.remove", (proc, id) =>
+    elements.get(proc).get(id).remove(),
+);
+os.registerSyscall("dom.delete", (proc, id) => elements.get(proc).delete(id));
+
+os.registerSysget("dom.mobile", (proc, id) => innerWidth < 768);
+
 os.gui = {
     elements: elements,
 };
@@ -54,7 +74,18 @@ class Desktop {
         this.display.append(this.desktop);
         document.body.append(this.display);
 
+        this.init();
         this.#styles();
+    }
+
+    async init() {
+        if (await sysget("dom.mobile")) {
+            const erudaScript = document.createElement("script");
+            erudaScript.src = "https://cdn.jsdelivr.net/npm/eruda";
+            document.body.append(erudaScript);
+
+            erudaScript.onload = () => eruda.init();
+        }
     }
 
     #styles() {
@@ -68,8 +99,11 @@ class Desktop {
         this.display.style.height = "100vh";
         this.display.style.width = "100vw";
 
-        this.desktop.style.flexGrow = "1";
-        this.desktop.style.position = "relative";
+        this.desktop.style.cssText = `
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        `
     }
 }
 

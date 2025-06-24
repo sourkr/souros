@@ -1,3 +1,5 @@
+const { svg } = await require("A:/apps/libs/image.js");
+
 const windows = new Map();
 
 os.registerSyscall("window.open", (proc, id) => {
@@ -15,20 +17,25 @@ os.registerSyscall(
 );
 
 os.registerSyscall("window.content", (proc, id, content) =>
-    windows.get(proc).get(id).content.append(os.gui.elements.get(proc).get(content)),
+    windows
+        .get(proc)
+        .get(id)
+        .content.append(os.gui.elements.get(proc).get(content)),
 );
 
 function close(proc, id) {
-    windows.get(proc).get(id).close();
+    windows.get(proc).get(id).window.remove();
     windows.get(proc).delete(id);
-    proc.kill()
+    proc.kill();
 }
+
+let movingWindow = null;
 
 class Window {
     constructor(proc, id) {
-        this.proc = proc
-        this.id = id
-        
+        this.proc = proc;
+        this.id = id;
+
         this.window = document.createElement("div");
         this.content = document.createElement("div");
         this.#titlebar();
@@ -36,72 +43,65 @@ class Window {
         this.window.append(this.content);
         document.getElementById("desktop").append(this.window);
 
+        this.#init();
         this.#style();
         this.#events();
     }
 
+    async #init() {
+        this.closeBtn.src = await svg("A:/apps/icons/close.svg");
+    }
+
     close() {
-        this.window.remove();
+        close(this.proc, this.id);
     }
 
     #style() {
-        this.window.style.position = "absolute";
-        this.window.style.width = "400px";
-        this.window.style.height = "300px";
-        this.window.style.border = "1px solid #ccc";
-        this.window.style.backgroundColor = "#fff";
-        this.window.style.display = "flex";
-        this.window.style.flexDirection = "column";
-        this.window.style.boxShadow = "0 2px 10px rgba(0,0,0,0.2)";
-        this.window.style.borderRadius = "4px";
-        this.window.style.overflow = "hidden";
+        this.window.style.cssText = `
+            position: absolute;
+            width: 400px;
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 5px lightgray;
+            border-radius: 10px;
+            overflow: hidden;
+        `;
 
-        this.content.style.flexGrow = "1";
-        this.content.style.padding = "10px";
+        this.content.style.flex = "1";
         this.content.style.overflow = "auto";
 
-        this.titlebar.style.backgroundColor = "#eee";
-        this.titlebar.style.padding = "8px 10px";
-        this.titlebar.style.cursor = "move";
-        this.titlebar.style.display = "flex";
-        this.titlebar.style.alignItems = "center";
-        this.titlebar.style.justifyContent = "space-between";
+        this.titlebar.style.cssText = `
+            background: hsl(30 25 95);
+            cursor: move;
+            display: flex;
+            align-items: center;
+            height: 35px;
+            user-select: none;
+        `;
 
-        this.title.style.flexGrow = "1";
-        this.title.style.fontWeight = "bold";
+        this.title.style.cssText = `
+            flex: 1;
+            padding-left: 15px;
+        `;
 
-        this.closeBtn.style.width = "20px";
-        this.closeBtn.style.height = "20px";
-        this.closeBtn.style.borderRadius = "50%";
-        this.closeBtn.style.backgroundColor = "#f44336";
-        this.closeBtn.style.color = "#fff";
-        this.closeBtn.style.display = "flex";
-        this.closeBtn.style.alignItems = "center";
-        this.closeBtn.style.justifyContent = "center";
-        this.closeBtn.style.cursor = "pointer";
+        this.closeBtn.style.cssText = `
+            width: 55px;
+            height: 35px;
+            padding: 7.5px;
+            box-sizing: border-box;
+            cursor: pointer;
+        `;
+
+        hover(this.closeBtn);
     }
 
     #events() {
         this.titlebar.onmousedown = (ev) => {
-            console.log(ev);
-            this.moving = Point2D.fromEvent(ev);
-        };
-
-        this.titlebar.onmousemove = (ev) => {
-            if (this.moving) {
-                const pos = Point2D.fromEvent(ev);
-                const delta = pos.subtract(this.moving);
-                this.moving = pos;
-
-                const rect = this.window.getBoundingClientRect();
-
-                this.window.style.left = `${rect.x + delta.x}px`;
-                this.window.style.top = `${rect.y + delta.y}px`;
-            }
-        };
-
-        this.titlebar.onmouseup = () => {
-            this.moving = null;
+            movingWindow = {
+                window: this.window,
+                pos: Point2D.fromEvent(ev),
+            };
         };
 
         this.closeBtn.onclick = () => close(this.proc, this.id);
@@ -110,14 +110,26 @@ class Window {
     #titlebar() {
         this.titlebar = document.createElement("div");
         this.title = document.createElement("div");
-        this.closeBtn = document.createElement("div");
-
-        this.closeBtn.innerText = "x";
+        this.closeBtn = document.createElement("img");
 
         this.titlebar.append(this.title, this.closeBtn);
         this.window.append(this.titlebar);
     }
 }
+
+window.onmousemove = (ev) => {
+    if (movingWindow) {
+        const pos = Point2D.fromEvent(ev);
+        const delta = pos.subtract(movingWindow.pos);
+        movingWindow.pos = pos;
+
+        const rect = movingWindow.window.getBoundingClientRect();
+        movingWindow.window.style.left = `${rect.x + delta.x}px`;
+        movingWindow.window.style.top = `${rect.y + delta.y}px`;
+    }
+};
+
+window.onmouseup = () => (movingWindow = null);
 
 class Point2D {
     constructor(x, y) {
@@ -132,4 +144,12 @@ class Point2D {
     subtract(p) {
         return new Point2D(this.x - p.x, this.y - p.y);
     }
+}
+
+function hover(ele) {
+    ele.style.cursor = "pointer";
+    ele.style.transition = "background .25s";
+
+    ele.onmouseenter = () => (ele.style.background = "hsl(0 0 50 / .1)");
+    ele.onmouseout = () => (ele.style.background = "transparent");
 }

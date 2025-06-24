@@ -4,7 +4,6 @@ class Process {
 
     constructor() {
         this.#thread = new Worker("thread.js");
-
         this.#thread.onmessage = (ev) => this.#receive(ev.data);
     }
 
@@ -14,25 +13,31 @@ class Process {
 
     async #receive(data) {
         switch (data.cmd) {
-            case "syscall":
-                os.syscalls.get(data.name)(this, ...data.args);
+            case "syscall": {
+                const func = os.syscalls.get(data.name);
+                if (typeof func !== "function")
+                    throw new Error(`No such syscall: ${data.name}`);
+                func(this, ...data.args);
                 break;
+            }
 
-            case "sysget":
-                console.log(data);
+            case "sysget": {
+                const func = os.sysgets.get(data.name);
+                if (!func) throw new Error(`No such sysget: ${data.name}`);
                 this.post({
                     cmd: "sysget",
                     id: data.id,
-                    value: await os.sysgets.get(data.name)(this, ...data.args),
+                    value: await func(this, ...data.args),
                 });
                 break;
+            }
 
             case "end":
                 if (this.keepAlive) break;
 
             case "exit":
                 this.#onclose.forEach((listener) => listener());
-                this.kill()
+                this.kill();
                 break;
 
             case "error":
@@ -53,9 +58,9 @@ class Process {
     }
 
     kill() {
-        this.#thread.terminate()
+        this.#thread.terminate();
     }
-    
+
     static async create(path) {
         const proc = new Process();
 
@@ -104,6 +109,7 @@ window.os = {
 
         async read(fd) {
             const data = this.fdMap.get(fd);
+            if (!data) throw new Error(`Invalid fd: ${fd}`);
             return await data.drive.read(data.fd);
         },
 
@@ -198,13 +204,29 @@ window.os = {
     },
 };
 
-window.syscall = (name, ...args) => os.syscalls.get(name)(...args);
-window.sysget = (name, ...args) => os.sysgets.get(name)(...args);
+window.syscall = (name, ...args) => {
+    const func = os.syscalls.get(name);
+    if (typeof func !== "function") throw new Error(`No such syscall: ${name}`);
+    return func(null, ...args);
+};
+
+window.sysget = (name, ...args) => {
+    const func = os.sysgets.get(name);
+    if (!func) throw new Error(`No such sysget: ${name}`);
+    return func(null, ...args);
+};
+
+os.registerSysget("fs.drives", () => Array.from(os.drives.keys()));
+
+os.registerSysget("fs.open", (_proc, path, flags) => os.fs.open(path, flags));
+os.registerSyscall("fs.close", (_proc, fd) => os.fs.close(fd));
+os.registerSysget("fs.read", (_proc, fd) => os.fs.read(fd));
+os.registerSyscall("fs.write", (_proc, fd, str) => os.fs.write(fd, str));
+os.registerSysget("fs.readdir", (_proc, fd) => os.fs.readdir(fd));
+os.registerSyscall("fs.mkdir", (_proc, path) => os.fs.mkdir(path));
 
 (async () => {
-    os.registerSysget("fs.drives", () => Array.from(os.drives.keys()));
-
-    os.registerSysget("require", async (proc, path) => {
+    os.registerSysget("require", async (_proc, path) => {
         const fd = await os.fs.open(path, "read");
         if (fd === -1) throw new Error(`No such file or directory: ${path}`);
         const code = await os.fs.read(fd);

@@ -32,6 +32,10 @@ function syscall(name, ...args) {
     let resolverId = 0;
     const resolved = [];
 
+    const events = new Map();
+    let eventId = 0;
+    const removedEvents = [];
+
     function sysget(name, ...args) {
         return new Promise((resolve) => {
             let id;
@@ -48,54 +52,73 @@ function syscall(name, ...args) {
         });
     }
 
+    function sysevent(callback) {
+        let id;
+
+        if (removedEvents.length) id = removedEvents.shift();
+        else id = eventId++;
+
+        events.set(id, callback);
+        return id;
+    }
+
+    function deleteEvent(id) {
+        events.delete(id);
+    }
+
     self.sysget = sysget;
+    self.sysevent = sysevent;
+    self.deleteEvent = deleteEvent;
 
-    self.onmessage = async (ev) => {
-        if (ev.data.cmd === "exec") {
-            let func;
+    self.onmessage = (ev) => handleMessage(ev.data);
 
-            // try {
-            //     func = new AsyncFunction(ev.data.code);
-            // } catch (err) {
-            //     self.postMessage({ cmd: "log", msg: err });
-            //     const stack = `at ${ev.data.path}`
-            // }
+    async function handleMessage(data) {
+        switch (data.cmd) {
+            case "exec":
+                let func;
 
-            try {
-                const func = AsyncFunction(ev.data.code);
-                await func();
-            } catch (err) {
-                self.postMessage({ cmd: "log", msg: err.stack });
+                try {
+                    func = AsyncFunction(data.code);
+                    await func();
+                } catch (err) {
+                    self.postMessage({ cmd: "log", msg: err.stack });
 
-                const lines = err.stack
-                    .split("\n")
-                    .slice(0, -1)
-                    .map((line) =>
-                        line
-                            // .replace(
-                            //     /at eval \(eval at <anonymous> \(.+\), <anonymous>(:\d+:\d+)\)/,
-                            //     `at ${ev.data.path}$1`,
-                            // )
-                            // .replace(
-                            //     /(at \w+) \(eval at <anonymous> \(.+\), <anonymous>(:\d+:\d+)\)/,
-                            //     `$1 ${ev.data.path}$2`,
-                            // )
-                            .replace(
-                                /at async eval \(eval at self.onmessage \(.+\), <anonymous>:(\d+):(\d+)\)/,
-                                (_, lineno, col) => {
-                                    return `at ${ev.data.path}:${lineno - 2}:${col}`;
-                                },
-                            ),
-                    );
+                    const lines = err.stack
+                        .split("\n")
+                        .slice(0, -1)
+                        .map((line) =>
+                            line
+                                // .replace(
+                                //     /at eval \(eval at <anonymous> \(.+\), <anonymous>(:\d+:\d+)\)/,
+                                //     `at ${ev.data.path}$1`,
+                                // )
+                                // .replace(
+                                //     /(at \w+) \(eval at <anonymous> \(.+\), <anonymous>(:\d+:\d+)\)/,
+                                //     `$1 ${ev.data.path}$2`,
+                                // )
+                                .replace(
+                                    /at async eval \(eval at self.onmessage \(.+\), <anonymous>:(\d+):(\d+)\)/,
+                                    (_, lineno, col) => {
+                                        return `at ${data.path}:${lineno - 2}:${col}`;
+                                    },
+                                ),
+                        );
 
-                err.stack = lines.join("\n");
+                    err.stack = lines.join("\n");
 
-                self.postMessage({ cmd: "error", error: err });
-            }
-        } else if (ev.data.cmd === "sysget") {
-            resolvers.get(ev.data.id)(ev.data.value);
-            resolvers.delete(ev.data.id);
-            resolved.push(ev.data.id);
+                    self.postMessage({ cmd: "error", error: err });
+                }
+                break;
+
+            case "sysget":
+                resolvers.get(data.id)(data.value);
+                resolvers.delete(data.id);
+                resolved.push(data.id);
+                break;
+
+            case "event":
+                events.get(data.id)();
+                break;
         }
-    };
+    }
 })();

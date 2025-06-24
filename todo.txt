@@ -1,0 +1,4 @@
+implement
+	- syscall(dom.on)
+	- syscall(dom.off)
+	- onclose for syscall(fs.open)

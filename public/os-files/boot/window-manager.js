@@ -30,6 +30,7 @@ function close(proc, id) {
 }
 
 let movingWindow = null;
+let resizingWindow = null;
 
 class Window {
     constructor(proc, id) {
@@ -39,6 +40,7 @@ class Window {
         this.window = document.createElement("div");
         this.content = document.createElement("div");
         this.#titlebar();
+        this.#resizeHandles();
 
         this.window.append(this.content);
         document.getElementById("desktop").append(this.window);
@@ -93,6 +95,37 @@ class Window {
             cursor: pointer;
         `;
 
+        // Style resize handles
+        this.resizeHandles.se.style.cssText = `
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            cursor: se-resize;
+            background: transparent;
+        `;
+
+        this.resizeHandles.s.style.cssText = `
+            position: absolute;
+            bottom: 0;
+            left: 10px;
+            right: 10px;
+            height: 5px;
+            cursor: s-resize;
+            background: transparent;
+        `;
+
+        this.resizeHandles.e.style.cssText = `
+            position: absolute;
+            top: 35px;
+            right: 0;
+            bottom: 5px;
+            width: 5px;
+            cursor: e-resize;
+            background: transparent;
+        `;
+
         hover(this.closeBtn);
     }
 
@@ -105,6 +138,21 @@ class Window {
         };
 
         this.closeBtn.onclick = () => close(this.proc, this.id);
+
+        // Resize event listeners
+        Object.keys(this.resizeHandles).forEach(direction => {
+            this.resizeHandles[direction].onmousedown = (ev) => {
+                ev.stopPropagation();
+                const rect = this.window.getBoundingClientRect();
+                resizingWindow = {
+                    window: this.window,
+                    direction: direction,
+                    startPos: Point2D.fromEvent(ev),
+                    startSize: { width: rect.width, height: rect.height },
+                    startPosition: { x: rect.x, y: rect.y }
+                };
+            };
+        });
     }
 
     #titlebar() {
@@ -114,6 +162,21 @@ class Window {
 
         this.titlebar.append(this.title, this.closeBtn);
         this.window.append(this.titlebar);
+    }
+
+    #resizeHandles() {
+        this.resizeHandles = {
+            se: document.createElement("div"), // bottom-right
+            s: document.createElement("div"),  // bottom
+            e: document.createElement("div"),  // right
+        };
+
+        // Style resize handles
+        Object.keys(this.resizeHandles).forEach(direction => {
+            const handle = this.resizeHandles[direction];
+            handle.className = `resize-handle resize-${direction}`;
+            this.window.append(handle);
+        });
     }
 }
 
@@ -127,9 +190,36 @@ window.onmousemove = (ev) => {
         movingWindow.window.style.left = `${rect.x + delta.x}px`;
         movingWindow.window.style.top = `${rect.y + delta.y}px`;
     }
+    
+    if (resizingWindow) {
+        const pos = Point2D.fromEvent(ev);
+        const delta = pos.subtract(resizingWindow.startPos);
+        const minWidth = 200;
+        const minHeight = 150;
+
+        switch (resizingWindow.direction) {
+            case 'se': // bottom-right
+                const newWidth = Math.max(minWidth, resizingWindow.startSize.width + delta.x);
+                const newHeight = Math.max(minHeight, resizingWindow.startSize.height + delta.y);
+                resizingWindow.window.style.width = `${newWidth}px`;
+                resizingWindow.window.style.height = `${newHeight}px`;
+                break;
+            case 's': // bottom
+                const heightS = Math.max(minHeight, resizingWindow.startSize.height + delta.y);
+                resizingWindow.window.style.height = `${heightS}px`;
+                break;
+            case 'e': // right
+                const widthE = Math.max(minWidth, resizingWindow.startSize.width + delta.x);
+                resizingWindow.window.style.width = `${widthE}px`;
+                break;
+        }
+    }
 };
 
-window.onmouseup = () => (movingWindow = null);
+window.onmouseup = () => {
+    movingWindow = null;
+    resizingWindow = null;
+};
 
 class Point2D {
     constructor(x, y) {

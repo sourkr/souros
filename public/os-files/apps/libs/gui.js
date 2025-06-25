@@ -61,10 +61,6 @@ class Element {
         syscall("dom.off", this._id, event, eventId);
     }
 
-    get _element() {
-        return document.querySelector(`[data-id="${this._id}"]`);
-    }
-
     set size(dim) {
         this.css("width", dim);
         this.css("height", dim);

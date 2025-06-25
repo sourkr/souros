@@ -258,12 +258,6 @@ os.registerSysget("fs.readdir", (_proc, fd) => os.fs.readdir(fd));
 os.registerSyscall("fs.mkdir", (_proc, path) => os.fs.mkdir(path));
 os.registerSysget("fs.stat", (_proc, fd) => os.fs.stat(fd));
 
-os.registerSyscall("dom.create", (_proc, id, tag) => {
-    const element = document.createElement(tag);
-    element.setAttribute('data-id', id);
-    elements.set(id, element);
-});
-
 (async () => {
     os.registerSysget("require", async (_proc, path) => {
         const fd = await os.fs.open(path, "read");

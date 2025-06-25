@@ -6,7 +6,7 @@ class Element {
 
     #events = new Map();
 
-    children = [];
+    children = []
 
     constructor(tag) {
         if (Element.#deleted.length) this._id = Element.#deleted.shift();
@@ -61,7 +61,7 @@ class Element {
         syscall("dom.off", this._id, event, eventId);
     }
 
-    size(dim) {
+    set size(dim) {
         this.css("width", dim);
         this.css("height", dim);
     }
@@ -72,6 +72,7 @@ class FlexBox extends Element {
         super("div");
         this.css("display", "flex");
         this.css("flex-direction", dir);
+        this.css("box-sizing", "border-box");
     }
 
     set gap(dim) {
@@ -93,8 +94,32 @@ class Image extends Element {
 
     set src(src) {
         if (src.endsWith(".svg")) {
-            svg(src).then((src) => syscall("dom.attf", this._id, "src", src));
+            svg(src).then((src) => syscall("dom.attr", this._id, "src", src));
+        } else {
+            syscall("dom.attr", this._id, "src", src);
         }
+    }
+}
+
+class ProgressBar extends Element {
+    constructor(progress) {
+        super("span");
+
+        this.css("position", "relative");
+        this.css("background", "hsl(200 100 85)");
+        this.css("height", "20px");
+        this.css("border-radius", "10px");
+        this.css("width", "150px");
+        this.css("overflow", "hidden");
+
+        this.bar = new Element("span");
+        this.bar.css("position", "absolute");
+        this.bar.css("background", "hsl(200 100 50)");
+        this.bar.css("height", "100%");
+        this.bar.css("border-radius", "10px");
+        this.bar.css("width", `${progress}%`);
+
+        this.append(this.bar);
     }
 }
 
@@ -120,7 +145,23 @@ class Window {
     }
 }
 
+function hover(ele, intensity = 0.1) {
+    ele.css("cursor", "pointer");
+    ele.css("transition", "background .25s");
+
+    ele.on("mouseover", () =>
+        ele.css("background", `hsl(0 0 50 / ${intensity})`),
+    );
+
+    ele.on("mouseout", () => ele.css("background", "transparent"));
+}
+
 exports.Window = Window;
 exports.Element = Element;
+
 exports.FlexBox = FlexBox;
 exports.Button = Button;
+exports.Image = Image;
+exports.ProgressBar = ProgressBar;
+
+exports.hover = hover;

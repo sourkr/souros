@@ -1,6 +1,7 @@
 const { svg } = await require("A:/apps/libs/image.js");
 
 const windows = new Map();
+const events = new Map();
 
 os.registerSyscall("window.open", (proc, id) => {
     if (!windows.has(proc)) windows.set(proc, new Map());
@@ -48,6 +49,8 @@ class Window {
         this.#style();
         this.#events();
         this.#addResizeHandles();
+
+        Window.onopen?.(this)
     }
 
     async #init() {
@@ -72,8 +75,11 @@ class Window {
             overflow: hidden;
         `;
 
-        this.content.style.flex = "1";
-        this.content.style.overflow = "auto";
+        this.content.style.cssText = `
+            flex: 1;
+            overflow: auto;
+            background: white;
+        `
 
         this.titlebar.style.cssText = `
             background: hsl(30 25 95);
@@ -114,20 +120,52 @@ class Window {
     #addResizeHandles() {
         // Create resize handles for all edges and corners
         const handles = [
-            { name: 'n', cursor: 'ns-resize', position: 'top: -3px; left: 3px; right: 3px; height: 6px;' },
-            { name: 's', cursor: 'ns-resize', position: 'bottom: -3px; left: 3px; right: 3px; height: 6px;' },
-            { name: 'e', cursor: 'ew-resize', position: 'right: -3px; top: 3px; bottom: 3px; width: 6px;' },
-            { name: 'w', cursor: 'ew-resize', position: 'left: -3px; top: 3px; bottom: 3px; width: 6px;' },
-            { name: 'ne', cursor: 'nesw-resize', position: 'top: -3px; right: -3px; width: 6px; height: 6px;' },
-            { name: 'nw', cursor: 'nwse-resize', position: 'top: -3px; left: -3px; width: 6px; height: 6px;' },
-            { name: 'se', cursor: 'nwse-resize', position: 'bottom: -3px; right: -3px; width: 6px; height: 6px;' },
-            { name: 'sw', cursor: 'nesw-resize', position: 'bottom: -3px; left: -3px; width: 6px; height: 6px;' }
+            {
+                name: "n",
+                cursor: "ns-resize",
+                position: "top: -3px; left: 3px; right: 3px; height: 6px;",
+            },
+            {
+                name: "s",
+                cursor: "ns-resize",
+                position: "bottom: -3px; left: 3px; right: 3px; height: 6px;",
+            },
+            {
+                name: "e",
+                cursor: "ew-resize",
+                position: "right: -3px; top: 3px; bottom: 3px; width: 6px;",
+            },
+            {
+                name: "w",
+                cursor: "ew-resize",
+                position: "left: -3px; top: 3px; bottom: 3px; width: 6px;",
+            },
+            {
+                name: "ne",
+                cursor: "nesw-resize",
+                position: "top: -3px; right: -3px; width: 6px; height: 6px;",
+            },
+            {
+                name: "nw",
+                cursor: "nwse-resize",
+                position: "top: -3px; left: -3px; width: 6px; height: 6px;",
+            },
+            {
+                name: "se",
+                cursor: "nwse-resize",
+                position: "bottom: -3px; right: -3px; width: 6px; height: 6px;",
+            },
+            {
+                name: "sw",
+                cursor: "nesw-resize",
+                position: "bottom: -3px; left: -3px; width: 6px; height: 6px;",
+            },
         ];
 
         this.resizeHandles = {};
-        
-        handles.forEach(handle => {
-            const element = document.createElement('div');
+
+        handles.forEach((handle) => {
+            const element = document.createElement("div");
             element.className = `resize-handle resize-${handle.name}`;
             element.style.cssText = `
                 position: absolute;
@@ -135,12 +173,12 @@ class Window {
                 cursor: ${handle.cursor};
                 z-index: 10;
             `;
-            
+
             element.onmousedown = (e) => {
                 e.stopPropagation();
                 this.#startResize(e, handle.name);
             };
-            
+
             this.resizeHandles[handle.name] = element;
             this.window.appendChild(element);
         });
@@ -156,7 +194,7 @@ class Window {
             startWidth: rect.width,
             startHeight: rect.height,
             startLeft: rect.left,
-            startTop: rect.top
+            startTop: rect.top,
         };
     }
 
@@ -170,6 +208,8 @@ class Window {
     }
 }
 
+window.Window = Window;
+
 window.onmousemove = (ev) => {
     if (movingWindow) {
         const pos = Point2D.fromEvent(ev);
@@ -180,33 +220,42 @@ window.onmousemove = (ev) => {
         movingWindow.window.style.left = `${rect.x + delta.x}px`;
         movingWindow.window.style.top = `${rect.y + delta.y}px`;
     }
-    
+
     if (resizingWindow) {
-        const { window: win, direction, startX, startY, startWidth, startHeight, startLeft, startTop } = resizingWindow;
+        const {
+            window: win,
+            direction,
+            startX,
+            startY,
+            startWidth,
+            startHeight,
+            startLeft,
+            startTop,
+        } = resizingWindow;
         const deltaX = ev.clientX - startX;
         const deltaY = ev.clientY - startY;
-        
+
         let newWidth = startWidth;
         let newHeight = startHeight;
         let newLeft = startLeft;
         let newTop = startTop;
-        
+
         // Handle horizontal resizing
-        if (direction.includes('e')) {
+        if (direction.includes("e")) {
             newWidth = Math.max(200, startWidth + deltaX);
-        } else if (direction.includes('w')) {
+        } else if (direction.includes("w")) {
             newWidth = Math.max(200, startWidth - deltaX);
             newLeft = startLeft + (startWidth - newWidth);
         }
-        
+
         // Handle vertical resizing
-        if (direction.includes('s')) {
+        if (direction.includes("s")) {
             newHeight = Math.max(150, startHeight + deltaY);
-        } else if (direction.includes('n')) {
+        } else if (direction.includes("n")) {
             newHeight = Math.max(150, startHeight - deltaY);
             newTop = startTop + (startHeight - newHeight);
         }
-        
+
         win.style.width = `${newWidth}px`;
         win.style.height = `${newHeight}px`;
         win.style.left = `${newLeft}px`;

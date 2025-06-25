@@ -83,26 +83,28 @@ class Desktop {
             const erudaScript = document.createElement("script");
             erudaScript.src = "https://cdn.jsdelivr.net/npm/eruda";
             document.body.append(erudaScript);
-
             erudaScript.onload = () => eruda.init();
         }
     }
 
     #styles() {
-        document.body.style.padding = "0";
-        document.body.style.margin = "0";
-        document.body.style.overflow = "hidden";
-
+        document.body.style.cssText = `
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        `
         this.display.style.display = "flex";
         this.display.style.flexDirection = "column";
         this.display.style.overflow = "hidden";
         this.display.style.height = "100vh";
         this.display.style.width = "100vw";
-
+        
         this.desktop.style.cssText = `
             flex: 1;
             position: relative;
             overflow: hidden;
+            background: white;
         `
     }
 }

@@ -75,6 +75,7 @@ class Process {
         await os.fs.close(fd);
 
         proc.post({ cmd: "exec", code, path });
+        return proc
     }
 }
 
@@ -138,6 +139,11 @@ window.os = {
             this.fdMap.delete(fd);
             this.closedFd.push(fd);
         },
+
+        async stat(fd) {
+            const fdInfo = this.fdMap.get(fd);
+            return await fdInfo.drive.stat(fdInfo.fd);
+        }
     },
 
     kernel: {
@@ -204,6 +210,19 @@ window.os = {
     },
 };
 
+const proc = {
+    post(data) {
+        if (data.cmd === "event") {
+            const event = events.get(data.id);
+            if (typeof event === "function") event();
+        }    
+    }
+}
+
+const events = new Map();
+let eventId = 0;
+const removedEvents = []
+
 window.syscall = (name, ...args) => {
     const func = os.syscalls.get(name);
     if (typeof func !== "function") throw new Error(`No such syscall: ${name}`);
@@ -216,7 +235,20 @@ window.sysget = (name, ...args) => {
     return func(null, ...args);
 };
 
+window.sysevent = (func) => {
+    let id = -1
+    if (removedEvents.length) {
+        id = removedEvents.shift()
+    } else {
+        id = eventId++
+    }
+    events.set(id, func);
+    return id;
+}
+
 os.registerSysget("fs.drives", () => Array.from(os.drives.keys()));
+os.registerSysget("fs.drive.size", (_proc, name) => os.drives.get(name).size());
+os.registerSysget("fs.drive.used", (_proc, name) => os.drives.get(name).used());
 
 os.registerSysget("fs.open", (_proc, path, flags) => os.fs.open(path, flags));
 os.registerSyscall("fs.close", (_proc, fd) => os.fs.close(fd));
@@ -224,6 +256,7 @@ os.registerSysget("fs.read", (_proc, fd) => os.fs.read(fd));
 os.registerSyscall("fs.write", (_proc, fd, str) => os.fs.write(fd, str));
 os.registerSysget("fs.readdir", (_proc, fd) => os.fs.readdir(fd));
 os.registerSyscall("fs.mkdir", (_proc, path) => os.fs.mkdir(path));
+os.registerSysget("fs.stat", (_proc, fd) => os.fs.stat(fd));
 
 (async () => {
     os.registerSysget("require", async (_proc, path) => {

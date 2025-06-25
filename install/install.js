@@ -31,7 +31,7 @@ async function updateDir(webDir, sysDir) {
             localStorage.setItem(`${sysDir}${entry.name}`, await (await fetch(`${webDir}/${entry.name}`)).text())
         } else {
             drive.table[`${sysDir}${entry.name}`] = {
-                type: 'file',
+                type: 'dir',
                 created: time,
                 modified: time,
                 accessed: time,

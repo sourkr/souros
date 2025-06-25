@@ -1,8 +1,5 @@
-const {
-    Window, Element,
-    FlexBox, Button, Image, ProgressBar,
-    hover
-} = await require("A:/apps/libs/gui.js");
+const { Window, Element, FlexBox, Button, Image, ProgressBar, hover } =
+    await require("A:/apps/libs/gui.js");
 
 const mainContainer = new FlexBox("column");
 
@@ -39,25 +36,24 @@ async function update(path) {
         driveNames.forEach(async (driveName) => {
             const item = await driveItem(driveName);
             mainContainer.append(item);
-            item.on("dblclick", () => update(driveName) + '/');
+            item.on("dblclick", () => update(driveName) + "/");
         });
     } else {
         const dir = await sysget("fs.open", path, "read");
         const entries = await sysget("fs.readdir", dir);
         syscall("fs.close", dir);
 
-        const dirs = new FlexBox("column")
-        const files = new FlexBox("column")
+        const dirs = new FlexBox("column");
+        const files = new FlexBox("column");
 
         mainContainer.append(dirs);
         mainContainer.append(files);
-        
+
         entries.forEach(async (name) => {
             const fd = await sysget("fs.open", path + name, "read");
             const stat = await sysget("fs.stat", fd);
             syscall("fs.close", fd);
-           
-            
+
             if (stat.type === "dir") {
                 const item = folderItem(name);
                 dirs.append(item);
@@ -94,19 +90,19 @@ async function driveItem(driveName) {
 
     name.text = driveName;
     name.css("font-size", "1.2rem");
-    name.css("flex", '1');
+    name.css("flex", "1");
 
-    progressBar.css('display', 'flex');
-    
+    progressBar.css("display", "flex");
+
     progressText.text = `${round(formatBytes(used, "B"))} / ${round(formatBytes(size, "B"))}`;
     progressText.css("padding-left", "10px");
     progressText.css("font-size", ".8rem");
     // progressText.css("color", "hsl(0 0 50)");
-    progressText.css("align-self", 'center');
+    progressText.css("align-self", "center");
     progressBar.append(progressText);
 
     hover(layout);
-    
+
     return layout;
 }
 
@@ -163,7 +159,11 @@ async function fileItem(path) {
             icon.src = app.icons.src;
         }
     }
-    
+
+    if (name.endsWith(".svg")) {
+        // TODO: fix this
+    }
+
     return layout;
 }
 

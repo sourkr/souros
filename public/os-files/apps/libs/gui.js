@@ -123,6 +123,23 @@ class ProgressBar extends Element {
     }
 }
 
+class Input extends Element {
+    constructor() {
+        super("input");
+    }
+
+    async val(str) {
+        if (str) syscall("dom.prop", this._id, "value", str);
+        else return await sysget("dom.prop", this._id, "value");
+    }
+}
+
+class TextArea extends Input {
+    constructor() {
+        super("textarea");
+    }
+}
+
 class Window {
     static #id = 0;
     static #closed = [];
@@ -163,5 +180,6 @@ exports.FlexBox = FlexBox;
 exports.Button = Button;
 exports.Image = Image;
 exports.ProgressBar = ProgressBar;
+exports.Input = Input;
 
 exports.hover = hover;

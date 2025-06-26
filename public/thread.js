@@ -37,7 +37,7 @@ function syscall(name, ...args) {
     const removedEvents = [];
 
     function sysget(name, ...args) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             let id;
 
             if (resolved.length) {
@@ -46,7 +46,9 @@ function syscall(name, ...args) {
                 id = resolverId++;
             }
 
-            resolvers.set(id, resolve);
+            resolvers.set(id, { resolve, reject: err => {
+                reject(new Error('', { cause: err }))
+            } });
 
             self.postMessage({ cmd: "sysget", name, args, id });
         });
@@ -111,7 +113,7 @@ function syscall(name, ...args) {
                 break;
 
             case "sysget":
-                resolvers.get(data.id)(data.value);
+                resolvers.get(data.id).resolve(data.value);
                 resolvers.delete(data.id);
                 resolved.push(data.id);
                 break;
@@ -119,6 +121,12 @@ function syscall(name, ...args) {
             case "event":
                 events.get(data.id)();
                 break;
+            
+            case "err":
+                resolvers.get(data.id).reject(data.err);
+                resolvers.delete(data.id);
+                resolved.push(data.id);
+                
         }
     }
 })();

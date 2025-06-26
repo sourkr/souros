@@ -47,7 +47,8 @@ class Element {
     }
 
     clear() {
-        this.children.forEach((child) => child.remove());
+        while(this.children.length) this.children[0].remove()
+        // this.children.forEach((child) => child.remove());
     }
 
     on(event, callback) {
@@ -127,16 +128,16 @@ class Input extends Element {
     constructor() {
         super("input");
     }
+}
+
+class TextArea extends Element {
+    constructor() {
+        super("textarea");
+    }
 
     async val(str) {
         if (str) syscall("dom.prop", this._id, "value", str);
         else return await sysget("dom.prop", this._id, "value");
-    }
-}
-
-class TextArea extends Input {
-    constructor() {
-        super("textarea");
     }
 }
 
@@ -181,5 +182,6 @@ exports.Button = Button;
 exports.Image = Image;
 exports.ProgressBar = ProgressBar;
 exports.Input = Input;
+exports.TextArea = TextArea;
 
 exports.hover = hover;

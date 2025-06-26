@@ -133,6 +133,8 @@ class Taskbar {
         let timeout = null;
 
         icon.onmouseenter = () => {
+            const MAX_WIDTH = 250
+
             const layout = document.createElement("div");
             const titlebar = document.createElement("div");
             const title = document.createElement("div");
@@ -144,13 +146,13 @@ class Taskbar {
             const iconRect = icon.getBoundingClientRect();
             const contentRect = win.content.getBoundingClientRect();
 
-            const scale = 200 / contentRect.width;
+            const scale = MAX_WIDTH / contentRect.width;
 
             layout.style.cssText = `
                 position: absolute;
                 bottom: 5px;
                 left: ${Math.max(5, iconRect.x + iconRect.width / 2 - 100)}px;
-                width: 200px;
+                width: ${MAX_WIDTH}px;
                 display: flex;
                 flex-direction: column;
                 box-shadow: 0 0 5px lightgray;
@@ -192,7 +194,9 @@ class Taskbar {
                 scale: ${scale};
                 position: absolute;
                 bacground: red;
-                translate: -25% -25%;
+                left: ${-(contentRect.width - contentRect.width * scale)/2}px;
+                top: ${-(contentRect.height - contentRect.height * scale)/2}px;
+                overflow: auto;
             `;
 
             blocker.style.cssText = `
@@ -231,6 +235,14 @@ class Taskbar {
                 window.remove();
             }, 100);
         };
+
+        win.onclose = () => {
+            window.remove();
+            icon.remove();
+            if (this.taskbar.children.length === 2) {
+                this.seperator.remove();
+            }
+        }
 
         this.centerContainer.append(icon);
     }

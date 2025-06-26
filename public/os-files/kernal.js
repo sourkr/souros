@@ -4,7 +4,10 @@ class Process {
 
     constructor() {
         this.#thread = new Worker("thread.js");
-        this.#thread.onmessage = (ev) => this.#receive(ev.data);
+        
+        this.#thread.onmessage = async (ev) => {
+            await this.#receive(ev.data);
+        }
     }
 
     post(data) {
@@ -28,7 +31,7 @@ class Process {
                     cmd: "sysget",
                     id: data.id,
                     value: await func(this, ...data.args),
-                });
+                });                
                 break;
             }
 

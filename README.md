@@ -39,6 +39,15 @@ npm start
 
 Then, open your web browser and navigate to `http://localhost:3000` (or the port specified in the server configuration).
 
+### Installing the OS in Your Browser
+
+To use the web-based OS, you first need to install it in your browser's local storage. Follow these steps:
+
+1.  Make sure the server is running.
+2.  Navigate to the installation page at `http://localhost:3000/install/`.
+3.  Click the "Install Souros" button.
+4.  Once the installation is complete, you can access the web desktop at `http://localhost:3000/`.
+
 ## Technologies Used
 
 *   **Backend:** Node.js, Express

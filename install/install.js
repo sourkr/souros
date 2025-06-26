@@ -1,86 +1,98 @@
-const btnInstall = document.getElementById('installButton')
-const msg = document.getElementById('installMessage')
-const time = Date.now()
-const drive = createDrive()
+document.addEventListener('DOMContentLoaded', () => {
+    const btnInstall = document.getElementById('installButton')
+    const msg = document.getElementById('installMessage')
+    const progressBarContainer = document.querySelector('.progress-bar-container')
+    const progressBar = document.querySelector('.progress-bar')
+    const time = Date.now()
 
-async function installOS() {
-    await updateDir('/api/os-files-content/', '/')
-    console.log(drive);
-    localStorage.setItem('drive', JSON.stringify(drive))
-    msg.innerText = 'OS Installed Successfully'
-}
+    let drive = createDrive()
 
-async function updateDir(webDir, sysDir) {
-    const list = await (await fetch(webDir)).json()
-    const dirData = list.map(e => e.name).join('\n')
-    const dirPath = sysDir == '/' ? '/' : sysDir.slice(0, -1)
-    localStorage.setItem(dirPath, dirData)
-    // drive.table[dirPath].size = dirData.length
+    btnInstall.addEventListener('click', async () => {
+        btnInstall.disabled = true
+        msg.textContent = 'Starting installation...'
+        progressBarContainer.style.display = 'block'
+        progressBar.style.width = '0%'
 
-    for(let entry of list) {
-        console.log(sysDir + entry.name);
-        
-        if (entry.type == 'file') {
-            drive.table[`${sysDir}${entry.name}`] = {
-                type: 'file',
-                created: time,
-                modified: time,
-                accessed: time,
-            }
-
-            localStorage.setItem(`${sysDir}${entry.name}`, await (await fetch(`${webDir}/${entry.name}`)).text())
-        } else {
-            drive.table[`${sysDir}${entry.name}`] = {
-                type: 'dir',
-                created: time,
-                modified: time,
-                accessed: time,
-            }
-
-            await updateDir(`${webDir}/${entry.name}`, `${sysDir}${entry.name}/`)
-
-            // localStorage.setItem(`${sysDir}${entry.name}`, '')
+        try {
+            await installOS()
+            localStorage.setItem('drive', JSON.stringify(drive))
+            msg.textContent = 'OS Installed Successfully!'
+            progressBar.style.width = '100%'
+        } catch (error) {
+            msg.textContent = `Installation failed: ${error.message}`
+            btnInstall.disabled = false
         }
-    }
-}
+    })
 
-function createDrive() {
-    const drive =  {
-        size: getLocalStorageSizeInBytes(),
-        table: {
-            '/': {
-                type: 'dir',
-                created: time,
-                modified: time,
-                accessed: time,
+    async function installOS() {
+        const initialPath = '/api/os-files-content/'
+        const fileList = await (await fetch(initialPath)).json()
+        const totalFiles = await countFiles(initialPath, fileList)
+        let filesProcessed = 0
+
+        await updateDir(initialPath, '/', fileList, (processed) => {
+            filesProcessed += processed
+            const progress = (filesProcessed / totalFiles) * 100
+            progressBar.style.width = `${progress}%`
+            msg.textContent = `Installing... (${filesProcessed}/${totalFiles} files)`
+        })
+    }
+
+    async function countFiles(webDir, list) {
+        let count = list.filter(e => e.type === 'file').length
+        for (let entry of list) {
+            if (entry.type === 'dir') {
+                const subList = await (await fetch(`${webDir}${entry.name}/`)).json()
+                count += await countFiles(`${webDir}${entry.name}/`, subList)
             }
         }
+        return count
     }
 
-    // localStorage.setItem('drive', JSON.stringify(drive))
-    // localStorage.setItem('/', '')
+    async function updateDir(webDir, sysDir, list, progressCallback) {
+        const dirData = list.map(e => e.name).join('\n')
+        const dirPath = sysDir === '/' ? '/' : sysDir.slice(0, -1)
+        localStorage.setItem(dirPath, dirData)
 
-    return drive
-}
-
-function getLocalStorageSizeInBytes() {
-    return checkMB(5) * 1024 * 1024
-}
-
-function checkMB(size) {
-    for(let i = size; i > 0; i--) {
-        if (check(1024 * 1024 * i)) return size
+        for (let entry of list) {
+            if (entry.type === 'file') {
+                drive.table[`${sysDir}${entry.name}`] = {
+                    type: 'file',
+                    created: time,
+                    modified: time,
+                    accessed: time,
+                }
+                localStorage.setItem(`${sysDir}${entry.name}`, await (await fetch(`${webDir}${entry.name}`)).text())
+                progressCallback(1)
+            } else {
+                drive.table[`${sysDir}${entry.name}`] = {
+                    type: 'dir',
+                    created: time,
+                    modified: time,
+                    accessed: time,
+                }
+                const subList = await (await fetch(`${webDir}${entry.name}/`)).json()
+                await updateDir(`${webDir}${entry.name}/`, `${sysDir}${entry.name}/`, subList, progressCallback)
+            }
+        }
     }
-}
 
-function check(bytes) {
-    try {
-        localStorage.clear()
-        localStorage.setItem('a', '0'.repeat(bytes))
-        localStorage.clear()
-        return true
-    } catch(e) {
-        localStorage.clear()
-        return false
+    function createDrive() {
+        return {
+            size: getLocalStorageSizeInBytes(),
+            table: {
+                '/': {
+                    type: 'dir',
+                    created: time,
+                    modified: time,
+                    accessed: time,
+                }
+            }
+        }
     }
-}
+
+    function getLocalStorageSizeInBytes() {
+        // This is a rough estimation
+        return 5 * 1024 * 1024 // 5MB
+    }
+})

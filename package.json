@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "A simple web-based desktop environment.",
   "main": "server/server.js",
+  "type": "module",
   "scripts": {
     "start": "node server/server.js",
     "install-deps": "npm install"

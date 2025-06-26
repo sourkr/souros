@@ -1,11 +1,15 @@
-const express = require('express');
-const path = require('path');
-const fs = require('fs').promises;
-const axios = require('axios');
-const cheerio = require('cheerio');
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs/promises';
+import axios from 'axios';
+
 
 const app = express();
 const PORT = process.env.PORT || parseInt(process.argv[3]) || 3000;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const publicPath = path.join(__dirname, '..', 'public');
 const installPath = path.join(__dirname, '..', 'install');
